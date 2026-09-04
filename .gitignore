@@ -1,0 +1,20 @@
+# Variables de entorno y secretos
+.env
+mcp_config.json
+
+# Python y entornos virtuales
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest y cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs e IDE
+*.log
+.vscode/
+.idea/
