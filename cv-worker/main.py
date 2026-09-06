@@ -5,7 +5,7 @@ import logging
 from uuid import UUID
 
 from config import (
-    API_URL, CAMERA_INDEX, VENTA_ID, YOLO_MODEL_PATH, YOLO_CONF_THRESHOLD,
+    API_URL, CAMERA_INDEX, USE_SIMULATION, VENTA_ID, YOLO_MODEL_PATH, YOLO_CONF_THRESHOLD,
     FALLBACK_FRAME_THRESHOLD, COOL_DOWN_SECONDS
 )
 from barcode_reader import decodificar_codigo_barras
@@ -62,11 +62,17 @@ def main():
     yolo = DetectorYOLO(model_path=YOLO_MODEL_PATH, conf_thresh=YOLO_CONF_THRESHOLD)
     atlas = AtlasLogger()
 
-    # 2. Iniciar Captura de Video
-    cap = cv2.VideoCapture(CAMERA_INDEX)
-    if not cap.isOpened():
-        logger.error(f"No se pudo abrir la cámara index {CAMERA_INDEX}. Cambie CAMERA_INDEX en .env")
-        logger.info("Iniciando modo simulación con frame sintético. Presione 's' para simular lectura, 'f' para fallback.")
+    # 2. Iniciar Captura de Video (o modo simulación estricto)
+    cap = None
+    if not USE_SIMULATION and CAMERA_INDEX >= 0:
+        cap = cv2.VideoCapture(CAMERA_INDEX)
+        if not cap.isOpened():
+            logger.error(f"No se pudo abrir la cámara index {CAMERA_INDEX}.")
+            cap = None
+
+    if cap is None:
+        logger.info("▶ MODO SIMULACIÓN ACTIVO (La cámara de la laptop no se activará).")
+        logger.info("  Presione 'S' para simular lectura de producto, 'F' para fallback.")
 
     logger.info("\nControles de Teclado:")
     logger.info("  [S] Simular lectura exitosa (Coca-Cola / Sabritas)")
@@ -82,7 +88,7 @@ def main():
     current_fps = 0
 
     while True:
-        ret, frame = cap.read() if cap.isOpened() else (True, None)
+        ret, frame = cap.read() if cap is not None and cap.isOpened() else (True, None)
 
         # Si no hay cámara física disponible, crear un canvas sintético para pruebas de laboratorio
         if frame is None:
