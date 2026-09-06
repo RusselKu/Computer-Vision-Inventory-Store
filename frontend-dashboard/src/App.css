@@ -1,0 +1,256 @@
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: local('JetBrains Mono');
+}
+
+:root {
+  --ink: #1A2333;
+  --paper: #F6F5F1;
+  --teal: #0E7C6B;
+  --amber: #D98E2B;
+  --red: #B8433A;
+  --slate: #6B7280;
+  --line: #DEDAD0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+}
+
+.board {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+/* --- Encabezado tipo "estado de la tienda" --- */
+.board-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 3px solid var(--ink);
+  padding-bottom: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.board-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.board-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--slate);
+}
+
+.dot-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 0 0 rgba(14, 124, 107, 0.5);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(14, 124, 107, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(14, 124, 107, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(14, 124, 107, 0); }
+}
+
+/* --- Ticker de último evento en vivo --- */
+.ticker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  margin: 1.25rem 0;
+  animation: slideIn 0.35s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ticker-label {
+  color: var(--amber);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.7rem;
+}
+
+/* --- Grid principal: dos paneles --- */
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+@media (max-width: 720px) {
+  .panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel h2 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.panel-empty {
+  color: var(--slate);
+  font-size: 0.9rem;
+  padding: 0.75rem 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row-name {
+  font-size: 0.9rem;
+}
+
+.row-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--slate);
+}
+
+.stock-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+}
+
+.stock-badge.critico {
+  background: var(--red);
+  color: white;
+}
+
+.stock-badge.bajo {
+  background: var(--amber);
+  color: var(--ink);
+}
+
+.sale-total {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+/* --- Métricas grandes --- */
+.stats {
+  display: flex;
+  gap: 2.5rem;
+  margin: 1.75rem 0;
+  flex-wrap: wrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--slate);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* --- Panel de gráfica --- */
+.chart-panel {
+  margin: 1.5rem 0 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.chart-panel h2 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+}
+
+.alert-agotado {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background: var(--red);
+  color: white;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin: 1.25rem 0;
+  animation: slideIn 0.3s ease-out;
+}
+
+.alert-icon {
+  font-size: 1.1rem;
+}
+
+/* --- Filtro de rango --- */
+.filtro-rango {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.filtro-rango button {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  background: none;
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  color: var(--slate);
+}
+
+.filtro-rango button.activo {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
