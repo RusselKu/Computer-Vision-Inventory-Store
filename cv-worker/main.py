@@ -87,6 +87,13 @@ def main():
     fps_counter = 0
     current_fps = 0
 
+    sim_product_index = 0
+    sim_productos = [
+        {"codigo": "7501000111203", "clase": "sabritas", "nombre": "Sabritas Sal 45g"},
+        {"codigo": "7501000153036", "clase": "doritos", "nombre": "Doritos Nacho 58g"},
+        {"codigo": "7501055312107", "clase": "coca_cola", "nombre": "Coca-Cola 600ml"},
+    ]
+
     while True:
         ret, frame = cap.read() if cap is not None and cap.isOpened() else (True, None)
 
@@ -99,7 +106,7 @@ def main():
             cv2.rectangle(frame, (180, 100), (460, 380), (60, 65, 80), -1)
             cv2.putText(frame, "MODO SIMULACION ACTIVO (Sin camara)", (40, 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 220, 255), 2)
-            cv2.putText(frame, "Presione 'S' = Coca-Cola | 'F' = Fallback 5-frames", (40, 420),
+            cv2.putText(frame, "Presione 'S' = Rotar Producto | 'F' = Fallback", (40, 420),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
             cv2.putText(frame, "Presione 'C' = Nueva Venta | 'Q' = Salir", (40, 445),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
@@ -217,12 +224,14 @@ def main():
             logger.info("Cerrando worker de visión...")
             break
         elif key == ord('s'):
-            # Tecla S: Simular escaneo de Coca-Cola (7501055312107)
-            logger.info("Simulando lectura manual del producto Coca-Cola 600ml...")
+            # Tecla S: Simular escaneo rotativo de productos con stock
+            prod = sim_productos[sim_product_index % len(sim_productos)]
+            sim_product_index += 1
+            logger.info(f"Simulando lectura del producto '{prod['nombre']}' ({prod['codigo']})...")
             payload = {
                 "venta_id": venta_id_actual,
-                "codigo_barras": "7501055312107",
-                "clase_yolo": "coca_cola",
+                "codigo_barras": prod["codigo"],
+                "clase_yolo": prod["clase"],
                 "confianza": 0.98,
                 "bounding_box": {"x": 150, "y": 100, "w": 200, "h": 300},
                 "es_fallback": False
@@ -245,7 +254,7 @@ def main():
             # Tecla C: Crear una nueva venta activa
             venta_id_actual = obtener_o_crear_venta_activa()
 
-    if cap.isOpened():
+    if cap is not None and cap.isOpened():
         cap.release()
     cv2.destroyAllWindows()
 
