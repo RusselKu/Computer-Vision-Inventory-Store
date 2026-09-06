@@ -92,24 +92,17 @@ def main():
 
         # Si no hay cámara física disponible, crear un canvas sintético para pruebas de laboratorio
         if frame is None:
-            frame = 255 * (cv2.line(
-                cv2.rectangle(
-                    cv2.UMat(480, 640, cv2.CV_8UC3, (30, 35, 45)).get(),
-                    (180, 100), (460, 380), (70, 75, 90), -1
-                ).get(),
-                (200, 240), (440, 240), (255, 255, 255), 4
-            ) if 'UMat' in dir(cv2) else None)
-            
-            # Recrear frame limpio si cv2.UMat falla
             import numpy as np
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
             frame[:] = (30, 35, 45)
             # Dibujar área simulación
             cv2.rectangle(frame, (180, 100), (460, 380), (60, 65, 80), -1)
-            cv2.putText(frame, "Cámara no detectada - Modo Simulación Activo", (50, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 255), 2)
-            cv2.putText(frame, "Presione 'S' para detectar Coca-Cola", (120, 430),
+            cv2.putText(frame, "MODO SIMULACION ACTIVO (Sin camara)", (40, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 220, 255), 2)
+            cv2.putText(frame, "Presione 'S' = Coca-Cola | 'F' = Fallback 5-frames", (40, 420),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+            cv2.putText(frame, "Presione 'C' = Nueva Venta | 'Q' = Salir", (40, 445),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
 
         # Cálculo de FPS
         fps_counter += 1
