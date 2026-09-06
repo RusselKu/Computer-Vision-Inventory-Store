@@ -60,10 +60,44 @@ class VectorEngine:
             return None
 
     def _inicializar_catalogo_referencia(self):
-        """Genera vectores de firma sintéticos para los productos del catálogo de prueba."""
-        logger.info("Generando firma de vectores base para productos del catálogo...")
-        np.random.seed(42)  # Semilla fija para reproducibilidad
+        """Carga vectores de firma reales desde el dataset local SetImagenesBuenas/ si existe."""
+        import os
+        import glob
         
+        logger.info("Generando firma de vectores base para productos del catálogo...")
+        dataset_dir = "SetImagenesBuenas"
+        
+        mapping_dirs = {
+            "CocaColaSet": {"codigo": "7501055312107", "nombre": "Coca-Cola Original 600ml", "clase": "coca_cola"},
+            "SabritasPapas": {"codigo": "7501000111203", "nombre": "Sabritas Sal 45g", "clase": "sabritas"},
+            "RuflesQueso": {"codigo": "7501000122209", "nombre": "Ruffles Queso 50g", "clase": "ruffles"},
+            "GalletasChokis": {"codigo": "7501011115481", "nombre": "Galletas Chokis 76g", "clase": "chokis"},
+            "BoteAgua": {"codigo": "7501020512110", "nombre": "Agua Ciel Purificada 1L", "clase": "agua"},
+        }
+
+        cargados = 0
+        if os.path.exists(dataset_dir):
+            for folder, info in mapping_dirs.items():
+                folder_path = os.path.join(dataset_dir, folder)
+                if os.path.exists(folder_path):
+                    for img_file in glob.glob(os.path.join(folder_path, "*.*")):
+                        img = cv2.imread(img_file)
+                        if img is not None:
+                            vec = self.extraer_vector(img)
+                            if vec is not None:
+                                self.catalogo_vectores[f"{info['codigo']}_{os.path.basename(img_file)}"] = {
+                                    "codigo": info["codigo"],
+                                    "nombre": info["nombre"],
+                                    "clase": info["clase"],
+                                    "vector": vec
+                                }
+                                cargados += 1
+            if cargados > 0:
+                logger.info(f"✓ Cargados {cargados} vectores reales desde el dataset 'SetImagenesBuenas/'.")
+                return
+
+        # Fallback a firmas base sintéticas si no se encuentra el dataset
+        np.random.seed(42)
         productos_base = [
             {"codigo": "7501000111203", "nombre": "Sabritas Sal 45g", "clase": "sabritas"},
             {"codigo": "7501000153036", "nombre": "Doritos Nacho 58g", "clase": "doritos"},
@@ -71,7 +105,6 @@ class VectorEngine:
         ]
 
         for prod in productos_base:
-            # Generar un vector sintético único de 512 dimensiones para simulación de catálogo
             vec = np.random.randn(512).astype(np.float32)
             vec = vec / np.linalg.norm(vec)
             self.catalogo_vectores[prod["codigo"]] = {
