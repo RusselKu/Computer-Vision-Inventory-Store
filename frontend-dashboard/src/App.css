@@ -231,3 +231,26 @@ body {
 .alert-icon {
   font-size: 1.1rem;
 }
+
+/* --- Filtro de rango --- */
+.filtro-rango {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.filtro-rango button {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  background: none;
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  color: var(--slate);
+}
+
+.filtro-rango button.activo {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
