@@ -112,8 +112,8 @@ def test_evento_cv_integracion():
         "/api/v1/cv/deteccion",
         json={
             "venta_id": venta_id,
-            "codigo_barras": "7501000153036",  # Doritos Nacho
-            "clase_yolo": "doritos",
+            "codigo_barras": "7501055312107",  # Coca-Cola Original 600ml
+            "clase_yolo": "coca_cola",
             "confianza": 0.96,
             "bounding_box": {"x": 100, "y": 150, "w": 300, "h": 400},
             "es_fallback": False
@@ -122,7 +122,7 @@ def test_evento_cv_integracion():
     assert res_cv.status_code == 200
     data_cv = res_cv.json()
     assert data_cv["status"] == "agregado"
-    assert "Doritos" in data_cv["producto"]["nombre"]
+    assert "Coca-Cola" in data_cv["producto"]["nombre"]
 
     # 3. Enviar evento de fallback (falla de lectura en cámara)
     res_fallback = client.post(
