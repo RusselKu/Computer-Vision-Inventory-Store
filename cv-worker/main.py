@@ -11,6 +11,7 @@ from config import (
 from barcode_reader import decodificar_codigo_barras
 from yolo_detector import DetectorYOLO
 from atlas_logger import AtlasLogger
+from vector_engine import VectorEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("CVWorkerMain")
@@ -57,10 +58,11 @@ def main():
     logger.info("   Worker de Visión por Computadora — POS CV System       ")
     logger.info("==========================================================")
 
-    # 1. Inicializar Venta, Detector YOLO y Logger de Atlas
+    # 1. Inicializar Venta, Detector YOLO, Logger de Atlas y Motor Vectorial ResNet18
     venta_id_actual = obtener_o_crear_venta_activa()
     yolo = DetectorYOLO(model_path=YOLO_MODEL_PATH, conf_thresh=YOLO_CONF_THRESHOLD)
     atlas = AtlasLogger()
+    vector_engine = VectorEngine()
 
     # 2. Iniciar Captura de Video (o modo simulación estricto)
     cap = None
@@ -72,10 +74,11 @@ def main():
 
     if cap is None:
         logger.info("▶ MODO SIMULACIÓN ACTIVO (La cámara de la laptop no se activará).")
-        logger.info("  Presione 'S' para simular lectura de producto, 'F' para fallback.")
+        logger.info("  Presione 'S' para simular lectura de producto, 'V' para vectorización, 'F' para fallback.")
 
     logger.info("\nControles de Teclado:")
-    logger.info("  [S] Simular lectura exitosa (Coca-Cola / Sabritas)")
+    logger.info("  [S] Simular lectura exitosa por código de barras (Sabritas / Doritos)")
+    logger.info("  [V] Simular reconocimiento VECTORIAL por visión (ResNet18 Embeddings)")
     logger.info("  [F] Simular fallback (Alerta de 5 frames sin código)")
     logger.info("  [C] Crear nueva venta en el Backend")
     logger.info("  [Q] Salir\n")
@@ -106,10 +109,10 @@ def main():
             cv2.rectangle(frame, (180, 100), (460, 380), (60, 65, 80), -1)
             cv2.putText(frame, "MODO SIMULACION ACTIVO (Sin camara)", (40, 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 220, 255), 2)
-            cv2.putText(frame, "Presione 'S' = Rotar Producto | 'F' = Fallback", (40, 420),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-            cv2.putText(frame, "Presione 'C' = Nueva Venta | 'Q' = Salir", (40, 445),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
+            cv2.putText(frame, "Presione 'S' = Codigo | 'V' = Vector Embeddings | 'F' = Fallback", (30, 420),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
+            cv2.putText(frame, "Presione 'C' = Nueva Venta | 'Q' = Salir", (30, 445),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1)
 
         # Cálculo de FPS
         fps_counter += 1
@@ -224,15 +227,35 @@ def main():
             logger.info("Cerrando worker de visión...")
             break
         elif key == ord('s'):
-            # Tecla S: Simular escaneo rotativo de productos con stock
+            # Tecla S: Simular escaneo por Código de Barras
             prod = sim_productos[sim_product_index % len(sim_productos)]
             sim_product_index += 1
-            logger.info(f"Simulando lectura del producto '{prod['nombre']}' ({prod['codigo']})...")
+            logger.info(f"Simulando lectura de Código de Barras: '{prod['nombre']}' ({prod['codigo']})...")
             payload = {
                 "venta_id": venta_id_actual,
                 "codigo_barras": prod["codigo"],
                 "clase_yolo": prod["clase"],
                 "confianza": 0.98,
+                "bounding_box": {"x": 150, "y": 100, "w": 200, "h": 300},
+                "es_fallback": False
+            }
+            enviar_deteccion_api(payload)
+            last_action_time = time.time()
+        elif key == ord('v'):
+            # Tecla V: Simular Reconocimiento VECTORIAL (ResNet18 Embeddings + Coseno)
+            prod = sim_productos[sim_product_index % len(sim_productos)]
+            sim_product_index += 1
+            
+            # Extraer vector de prueba
+            vec = vector_engine.extraer_vector(frame)
+            match, sim_pct = vector_engine.buscar_producto_por_vector(vec)
+            
+            logger.info(f"★ ¡Reconocimiento Vectorial Visual Exitoso!: '{prod['nombre']}' (Similitud Coseno ResNet18: {round(sim_pct*100, 1)}%)")
+            payload = {
+                "venta_id": venta_id_actual,
+                "codigo_barras": prod["codigo"],
+                "clase_yolo": prod["clase"],
+                "confianza": round(float(sim_pct), 2),
                 "bounding_box": {"x": 150, "y": 100, "w": 200, "h": 300},
                 "es_fallback": False
             }
