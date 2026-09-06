@@ -209,12 +209,13 @@ def main():
                 enviar_deteccion_api(payload)
 
             else:
-                # Regla de los 5 Frames: Se detecta objeto no identificado
+                # Regla de N Frames: Se detecta objeto no identificado
                 consecutive_no_barcode_frames += 1
                 logger.info(f"Frame {consecutive_no_barcode_frames}/{FALLBACK_FRAME_THRESHOLD} sin reconocimiento visual...")
 
                 if consecutive_no_barcode_frames >= FALLBACK_FRAME_THRESHOLD:
-                    logger.warning("⚠️ REGLA DE 5 FRAMES ALCANZADA: Activando Fallback e informando al POS...")
+                    logger.warning(f"⚠️ LIMITE DE {FALLBACK_FRAME_THRESHOLD} FRAMES ALCANZADO: Activando Fallback e informando al POS...")
+                    consecutive_no_barcode_frames = 0
                     last_action_time = now
 
                     msg_err = f"Producto no reconocido tras {FALLBACK_FRAME_THRESHOLD} frames consecutivos."

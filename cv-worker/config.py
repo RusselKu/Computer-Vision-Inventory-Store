@@ -14,6 +14,6 @@ MONGODB_URI = os.getenv("MONGODB_URI", "")
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "pos_telemetria")
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "eventos_vision")
 
-FALLBACK_FRAME_THRESHOLD = int(os.getenv("FALLBACK_FRAME_THRESHOLD", "5"))
+FALLBACK_FRAME_THRESHOLD = int(os.getenv("FALLBACK_FRAME_THRESHOLD", "25"))
 COOL_DOWN_SECONDS = float(os.getenv("COOL_DOWN_SECONDS", "2.0"))
 

@@ -103,6 +103,18 @@ export default function App() {
   async function iniciarNuevaVenta() {
     setCargando(true);
     try {
+      // 1. Verificar si ya existe una venta abierta activa en la API
+      const resExistente = await fetch(`${API_BASE}/ventas?estado=abierta&limit=1`);
+      if (resExistente.ok) {
+        const abiertas = await resExistente.json();
+        if (abiertas && abiertas.length > 0) {
+          await recargarVenta(abiertas[0].id);
+          setCargando(false);
+          return;
+        }
+      }
+
+      // 2. Si no hay venta abierta, crear una nueva
       const res = await fetch(`${API_BASE}/ventas`, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
@@ -429,9 +441,31 @@ export default function App() {
                 onChange={(e) => setCodigoManual(e.target.value)}
                 autoFocus
               />
-              <button type="submit" className="scan-btn" style={{ width: '100%', padding: '12px' }}>
-                Confirmar e Ingresar
-              </button>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                <button type="submit" className="scan-btn" style={{ flex: 1, padding: '12px' }}>
+                  Confirmar e Ingresar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAlertaFallback(null);
+                    setCodigoManual('');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ef4444',
+                    color: '#f87171',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Cancelar / Regresar
+                </button>
+              </div>
             </form>
           </div>
         </div>
