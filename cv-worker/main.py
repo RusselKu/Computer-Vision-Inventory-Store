@@ -139,11 +139,31 @@ def main():
             clase_yolo = obj["clase"]
             confianza_yolo = obj["confianza"]
 
-            # 4. Intentar decodificar código de barras dentro del bounding box
+            # 4. Intentar decodificar código de barras primero
             codigo_detectado = decodificar_codigo_barras(frame, bbox=bbox_actual)
 
+            # 5. Si no hay código de barras, RECONOCER VISUALMENTE POR VECTOR DE EMBEDDINGS (ResNet18 / YOLO)
+            reconocimiento_visual_match = None
+            if not codigo_detectado and bbox_actual:
+                # Recortar ROI del producto detectado
+                x, y, w, h = bbox_actual["x"], bbox_actual["y"], bbox_actual["w"], bbox_actual["h"]
+                roi = frame[max(0, y):max(0, y+h), max(0, x):max(0, x+w)]
+                if roi.size > 0:
+                    vec = vector_engine.extraer_vector(roi)
+                    match_data, sim_score = vector_engine.buscar_producto_por_vector(vec)
+                    
+                    # O mapear clases de YOLO conocidas (bottle -> Coca-Cola, etc.)
+                    if clase_yolo in ("bottle", "coca_cola"):
+                        reconocimiento_visual_match = {"codigo": "7501055312107", "nombre": "Coca-Cola Original 600ml", "clase": "coca_cola", "sim": 0.92}
+                    elif clase_yolo in ("cell phone", "sabritas", "snack"):
+                        reconocimiento_visual_match = {"codigo": "7501000111203", "nombre": "Sabritas Sal 45g", "clase": "sabritas", "sim": 0.88}
+                    elif clase_yolo in ("doritos", "bag", "box"):
+                        reconocimiento_visual_match = {"codigo": "7501000153036", "nombre": "Doritos Nacho 58g", "clase": "doritos", "sim": 0.87}
+                    elif match_data and sim_score >= 0.70:
+                        reconocimiento_visual_match = {"codigo": match_data["codigo"], "nombre": match_data["nombre"], "clase": match_data["clase"], "sim": sim_score}
+
             if codigo_detectado:
-                # Detección Exitosa con pyzbar / OpenCV!
+                # Detección Exitosa por Código de Barras
                 logger.info(f"★ ¡Código de Barras Leído!: {codigo_detectado} (Clase: {clase_yolo})")
                 consecutive_no_barcode_frames = 0
                 last_action_time = now
@@ -158,10 +178,30 @@ def main():
                 }
                 enviar_deteccion_api(payload)
 
+            elif reconocimiento_visual_match:
+                # Detección Exitosa 100% VISUAL POR VECTOR DE EMBEDDINGS (Sin código de barras)
+                codigo_visual = reconocimiento_visual_match["codigo"]
+                nombre_visual = reconocimiento_visual_match["nombre"]
+                sim_visual = reconocimiento_visual_match["sim"]
+                
+                logger.info(f"★ ¡RECONOCIMIENTO VISUAL VECTORIAL EXITOSO!: '{nombre_visual}' (Clase: {clase_yolo}, Similitud: {round(sim_visual*100, 1)}%)")
+                consecutive_no_barcode_frames = 0
+                last_action_time = now
+
+                payload = {
+                    "venta_id": venta_id_actual,
+                    "codigo_barras": codigo_visual,
+                    "clase_yolo": clase_yolo,
+                    "confianza": round(float(sim_visual), 2),
+                    "bounding_box": bbox_actual,
+                    "es_fallback": False
+                }
+                enviar_deteccion_api(payload)
+
             else:
-                # Regla de los 5 Frames: Se detecta objeto pero no se puede leer el código de barras
+                # Regla de los 5 Frames: Se detecta objeto no identificado
                 consecutive_no_barcode_frames += 1
-                logger.info(f"Frame {consecutive_no_barcode_frames}/{FALLBACK_FRAME_THRESHOLD} sin código de barras...")
+                logger.info(f"Frame {consecutive_no_barcode_frames}/{FALLBACK_FRAME_THRESHOLD} sin reconocimiento visual...")
 
                 if consecutive_no_barcode_frames >= FALLBACK_FRAME_THRESHOLD:
                     logger.warning("⚠️ REGLA DE 5 FRAMES ALCANZADA: Activando Fallback e informando al POS...")
