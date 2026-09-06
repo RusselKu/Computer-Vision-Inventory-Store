@@ -18,12 +18,22 @@ logger = logging.getLogger("CVWorkerMain")
 
 
 def obtener_o_crear_venta_activa():
-    """Obtiene una venta activa existente o crea una nueva para pruebas de escaneo."""
+    """Obtiene una venta activa existente (del POS en navegador) o crea una nueva."""
     if VENTA_ID:
         return VENTA_ID
 
-    logger.info(f"Conectando a API en {API_URL} para crear/obtener venta activa de prueba...")
+    logger.info(f"Conectando a API en {API_URL} para buscar la venta activa del POS...")
     try:
+        # 1. Buscar si hay una venta abierta actualmente en el POS
+        res_list = requests.get(f"{API_URL}/ventas?estado=abierta&limit=1", timeout=3)
+        if res_list.status_code == 200:
+            ventas_abiertas = res_list.json()
+            if ventas_abiertas and len(ventas_abiertas) > 0:
+                v = ventas_abiertas[0]
+                logger.info(f"✓ Sincronizado con la Venta Activa del POS: {v['id']} (Folio: {v.get('folio')})")
+                return v["id"]
+
+        # 2. Si no hay venta abierta, crear una nueva
         res = requests.post(f"{API_URL}/ventas", timeout=3)
         if res.status_code == 201:
             nueva_venta = res.json()
