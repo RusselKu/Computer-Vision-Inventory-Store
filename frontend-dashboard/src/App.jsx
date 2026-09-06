@@ -68,7 +68,7 @@ function App() {
 
   const totalDelDia = ventas.reduce((acc, v) => acc + Number(v.total), 0);
   const ticketPromedio = ventas.length > 0 ? totalDelDia / ventas.length : 0;
-
+  const agotados = inventario.filter((item) => item.stock_actual === 0);
   // Recharts necesita un array simple; usamos los últimos 4 dígitos del folio como etiqueta corta
   const datosGrafica = ventas
     .slice()
@@ -88,6 +88,14 @@ function App() {
         </div>
       </div>
 
+      {agotados.length > 0 && (
+        <div className="alert-agotado">
+          <span className="alert-icon">⛔</span>
+      {agotados.length === 1
+      ? '1 producto agotado — reabastecer de inmediato'
+      : `${agotados.length} productos agotados — reabastecer de inmediato`}
+      </div>
+      )}
       {ultimoCambio && (
         <div className="ticker">
           <span className="ticker-label">Stock actualizado</span>
