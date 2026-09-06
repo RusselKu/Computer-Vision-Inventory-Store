@@ -226,6 +226,20 @@ def main():
         if key == ord('q') or key == 27:
             logger.info("Cerrando worker de visión...")
             break
+        elif key == ord('t'):
+            # Tecla T: Alternar en tiempo real entre Cámara de Laptop y Simulación
+            if cap is not None and cap.isOpened():
+                cap.release()
+                cap = None
+                logger.info("▶ Modo alternado: CAMBIADO A SIMULACIÓN (Cámara liberada)")
+            else:
+                logger.info("▶ Modo alternado: Activando CÁMARA DE LAPTOP (Index 0)...")
+                cap = cv2.VideoCapture(CAMERA_INDEX)
+                if not cap.isOpened():
+                    logger.error(f"No se pudo acceder a la cámara en el index {CAMERA_INDEX}.")
+                    cap = None
+                else:
+                    logger.info("✓ Cámara de la laptop encendida y transmitiendo.")
         elif key == ord('s'):
             # Tecla S: Simular escaneo por Código de Barras
             prod = sim_productos[sim_product_index % len(sim_productos)]
