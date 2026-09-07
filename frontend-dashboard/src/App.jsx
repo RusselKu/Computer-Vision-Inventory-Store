@@ -3,12 +3,15 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
 } from 'recharts';
+import { ShoppingCart, BarChart3 } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import PosView from './PosView';
 import './App.css';
 
 const API_URL = 'http://localhost:8000/api/v1';
 
 function App() {
+  const [activeTab, setActiveTab] = useState('pos'); // 'pos' o 'dashboard'
   const [inventario, setInventario] = useState([]); // solo bajo stock (para el panel de lista)
   const [inventarioCompleto, setInventarioCompleto] = useState([]); // todo, para la dona
   const [ventas, setVentas] = useState([]);
@@ -171,20 +174,58 @@ function App() {
   const infoUltimoCambio = ultimoCambio ? productosInfo[ultimoCambio.producto_id] : null;
 
   return (
-    <div className="board">
-      <div className="board-header">
-        <div className="brand">
-          <div className="brand-badge">TM</div>
+    <div className="unified-app-wrapper">
+      {/* BARRA SUPERIOR DE NAVEGACION POR PESTAÑAS */}
+      <header className="main-top-navbar">
+        <div className="navbar-brand">
+          <div className="brand-logo-badge">TM</div>
           <div>
-            <h1>Tienda Mérida</h1>
-            <p className="brand-subtitle">Centro de operaciones · Monitoreo en tiempo real</p>
+            <span className="navbar-app-title">Tienda Mérida</span>
+            <span className="navbar-app-subtitle">Sistema POS & Analytics CV</span>
           </div>
         </div>
-        <div className="board-status">
+
+        <nav className="navbar-tabs">
+          <button 
+            className={`nav-tab-btn ${activeTab === 'pos' ? 'active' : ''}`}
+            onClick={() => setActiveTab('pos')}
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>Punto de Venta (Cajero)</span>
+          </button>
+
+          <button 
+            className={`nav-tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Panel de Métricas (Gerente)</span>
+          </button>
+        </nav>
+
+        <div className="navbar-status-badge">
           <span className="dot-live"></span>
-          EN VIVO
+          <span>SISTEMA ACTIVO</span>
         </div>
-      </div>
+      </header>
+
+      {/* CONTENIDO SEGÚN PESTAÑA ACTIVA */}
+      {activeTab === 'pos' ? (
+        <PosView />
+      ) : (
+        <div className="board">
+          <div className="board-header">
+            <div className="brand">
+              <div>
+                <h1>Panel de Control Administrativo</h1>
+                <p className="brand-subtitle">Centro de operaciones · Monitoreo en tiempo real</p>
+              </div>
+            </div>
+            <div className="board-status">
+              <span className="dot-live"></span>
+              EN VIVO
+            </div>
+          </div>
 
       {agotados.length > 0 && (
         <div className="alert-agotado">
@@ -373,7 +414,8 @@ function App() {
             ))
           )}
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
