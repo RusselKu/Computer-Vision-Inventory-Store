@@ -1,16 +1,14 @@
-@font-face {
-  font-family: 'JetBrains Mono';
-  src: local('JetBrains Mono');
-}
-
 :root {
-  --ink: #1A2333;
-  --paper: #F6F5F1;
-  --teal: #0E7C6B;
-  --amber: #D98E2B;
-  --red: #B8433A;
-  --slate: #6B7280;
-  --line: #DEDAD0;
+  --bg: #0B0E1A;
+  --card: #151A2E;
+  --card-border: rgba(255, 255, 255, 0.07);
+  --text: #F4F5F7;
+  --text-dim: #8B92B0;
+  --purple: #8B5CF6;
+  --blue: #38BDF8;
+  --teal: #22D3B9;
+  --amber: #F5A623;
+  --red: #F43F5E;
 }
 
 * {
@@ -19,32 +17,101 @@
 
 body {
   margin: 0;
-  background: var(--paper);
-  color: var(--ink);
+  min-height: 100vh;
+  color: var(--text);
   font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 700px 500px at 8% -5%, rgba(139, 92, 246, 0.16), transparent 60%),
+    radial-gradient(ellipse 800px 600px at 100% 10%, rgba(56, 189, 248, 0.13), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 0% 90%, rgba(34, 211, 185, 0.10), transparent 60%),
+    radial-gradient(ellipse 600px 500px at 100% 100%, rgba(139, 92, 246, 0.10), transparent 60%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: auto, auto, auto, auto, 22px 22px;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+  background-attachment: fixed;
 }
 
 .board {
   max-width: 1080px;
   margin: 0 auto;
   padding: 2.5rem 1.5rem 4rem;
+  position: relative;
+  z-index: 1;
 }
 
-/* --- Encabezado tipo "estado de la tienda" --- */
+/* --- Ilustraciones decorativas laterales --- */
+.side-deco {
+  position: fixed;
+  top: 0;
+  width: 240px;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.side-deco svg {
+  width: 100%;
+  height: 100%;
+}
+
+.side-deco-left {
+  left: 0;
+}
+
+.side-deco-right {
+  right: 0;
+}
+
+/* Solo se ven si hay espacio real a los lados del contenido */
+@media (max-width: 1500px) {
+  .side-deco {
+    display: none;
+  }
+}
+
+/* --- Encabezado --- */
 .board-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  border-bottom: 3px solid var(--ink);
-  padding-bottom: 1rem;
+  padding-bottom: 1.25rem;
   margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.brand-badge {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 12px;
+  flex-shrink: 0;
 }
 
 .board-header h1 {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
   margin: 0;
+  color: var(--text);
+}
+
+.brand-subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-dim);
 }
 
 .board-status {
@@ -53,7 +120,8 @@ body {
   gap: 0.5rem;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8rem;
-  color: var(--slate);
+  color: var(--text-dim);
+  flex-shrink: 0;
 }
 
 .dot-live {
@@ -61,27 +129,43 @@ body {
   height: 8px;
   border-radius: 50%;
   background: var(--teal);
-  box-shadow: 0 0 0 0 rgba(14, 124, 107, 0.5);
   animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(14, 124, 107, 0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(14, 124, 107, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(14, 124, 107, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(34, 211, 185, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(34, 211, 185, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 211, 185, 0); }
 }
 
-/* --- Ticker de último evento en vivo --- */
+/* --- Alerta / Ticker --- */
+.alert-agotado {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1.1rem;
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #FF8FA3;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin: 1.5rem 0 0;
+  border-radius: 10px;
+  animation: slideIn 0.3s ease-out;
+}
+
 .ticker {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  background: var(--ink);
-  color: var(--paper);
+  padding: 0.85rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  color: var(--text);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
-  margin: 1.25rem 0;
+  margin: 1rem 0 0;
+  border-radius: 10px;
   animation: slideIn 0.35s ease-out;
 }
 
@@ -98,136 +182,6 @@ body {
   font-size: 0.7rem;
 }
 
-/* --- Grid principal: dos paneles --- */
-.panels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  margin-top: 2rem;
-}
-
-@media (max-width: 720px) {
-  .panels {
-    grid-template-columns: 1fr;
-  }
-}
-
-.panel h2 {
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin: 0 0 0.9rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.panel-empty {
-  color: var(--slate);
-  font-size: 0.9rem;
-  padding: 0.75rem 0;
-}
-
-.row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.row:last-child {
-  border-bottom: none;
-}
-
-.row-name {
-  font-size: 0.9rem;
-}
-
-.row-meta {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8rem;
-  color: var(--slate);
-}
-
-.stock-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 0.15rem 0.5rem;
-}
-
-.stock-badge.critico {
-  background: var(--red);
-  color: white;
-}
-
-.stock-badge.bajo {
-  background: var(--amber);
-  color: var(--ink);
-}
-
-.sale-total {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  color: var(--teal);
-}
-
-/* --- Métricas grandes --- */
-.stats {
-  display: flex;
-  gap: 2.5rem;
-  margin: 1.75rem 0;
-  flex-wrap: wrap;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.stat-label {
-  font-size: 0.72rem;
-  color: var(--slate);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.stat-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 1.9rem;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-/* --- Panel de gráfica --- */
-.chart-panel {
-  margin: 1.5rem 0 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--line);
-}
-
-.chart-panel h2 {
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin: 0 0 0.75rem;
-}
-
-.alert-agotado {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.85rem 1rem;
-  background: var(--red);
-  color: white;
-  font-weight: 700;
-  font-size: 0.9rem;
-  margin: 1.25rem 0;
-  animation: slideIn 0.3s ease-out;
-}
-
 .alert-icon {
   font-size: 1.1rem;
 }
@@ -236,21 +190,300 @@ body {
 .filtro-rango {
   display: flex;
   gap: 0.5rem;
-  margin-top: 1.5rem;
+  margin-top: 1.75rem;
 }
 
 .filtro-rango button {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.78rem;
-  background: none;
-  border: 1px solid var(--line);
-  padding: 0.4rem 0.8rem;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
   cursor: pointer;
-  color: var(--slate);
+  color: var(--text-dim);
+  transition: all 0.15s ease;
+}
+
+.filtro-rango button:hover {
+  border-color: var(--blue);
+  color: var(--text);
 }
 
 .filtro-rango button.activo {
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  color: white;
+  border-color: transparent;
+}
+
+/* --- Tarjetas de métricas --- */
+.stats {
+  display: flex;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 1.1rem 1.3rem;
+  flex: 1;
+  min-width: 180px;
+}
+
+.stat-icon {
+  font-size: 1.3rem;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon-purple { background: rgba(139, 92, 246, 0.18); }
+.icon-blue { background: rgba(56, 189, 248, 0.18); }
+.icon-teal { background: rgba(34, 211, 185, 0.18); }
+
+.stat-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* --- Tarjeta de gráfica --- */
+.chart-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem;
+  margin: 1.5rem 0;
+}
+
+.chart-card h2 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  color: var(--text);
+}
+
+/* --- Paneles --- */
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 720px) {
+  .panels { grid-template-columns: 1fr; }
+  .board-header { flex-wrap: wrap; gap: 0.75rem; }
+}
+
+.panel-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem;
+}
+
+.panel-card h2 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--card-border);
+  color: var(--text);
+}
+
+.panel-empty {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  padding: 0.75rem 0;
+}
+
+/* --- Fila de producto con barra de stock --- */
+.row-stock {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.row-stock:last-child { border-bottom: none; }
+
+.row-stock-top {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.5rem;
+}
+
+.thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: #1E2438;
+  border: 1px solid var(--card-border);
+}
+
+.thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.row-name {
+  flex: 1;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.stock-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+}
+
+.stock-badge.critico {
+  background: rgba(244, 63, 94, 0.2);
+  color: #FF8FA3;
+}
+
+.stock-badge.bajo {
+  background: rgba(245, 166, 35, 0.2);
+  color: var(--amber);
+}
+
+.bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--purple), var(--blue));
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.bar-fill.bar-critico {
+  background: var(--red);
+}
+
+/* --- Fila de venta --- */
+.row-venta {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.row-venta:last-child { border-bottom: none; }
+
+.venta-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(34, 211, 185, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.status-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(34, 211, 185, 0.15);
+  color: var(--teal);
+}
+
+.sale-total {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* --- Fila de dos gráficas lado a lado --- */
+.chart-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1.25rem;
+  margin: 1.5rem 0;
+}
+
+@media (max-width: 720px) {
+  .chart-row { grid-template-columns: 1fr; }
+}
+
+.chart-row .chart-card {
+  margin: 0;
+}
+
+/* --- Sparkline dentro de tarjeta de métrica --- */
+.stat-card-spark {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.stat-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+/* --- Dona --- */
+.chart-card-donut {
+  display: flex;
+  flex-direction: column;
+}
+
+.donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.donut-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
