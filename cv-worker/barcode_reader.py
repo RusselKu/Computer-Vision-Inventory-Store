@@ -39,22 +39,15 @@ def decodificar_codigo_barras(imagen, bbox=None):
         if x2 > x1 and y2 > y1:
             roi = imagen[y1:y2, x1:x2]
 
-    # Preprocesamiento de imagen para mejorar contraste e iluminación
+    # Preprocesamiento ultra-rápido
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY) if len(roi.shape) == 3 else roi
     
-    # Variante 1: Imagen directa
+    # Pasada 1: Lectura directa (súper rápida ~2ms)
     codigo = _procesar_con_pyzbar_o_cv(gray)
     if codigo:
         return codigo
 
-    # Variante 2: Umbralizado adaptativo para códigos con reflejo o poca luz
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    codigo = _procesar_con_pyzbar_o_cv(thresh)
-    if codigo:
-        return codigo
-
-    # Variante 3: Ajuste de contraste con CLAHE
+    # Pasada 2: Contraste CLAHE solo si la pasada directa falla
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     contrast_img = clahe.apply(gray)
     codigo = _procesar_con_pyzbar_o_cv(contrast_img)
@@ -74,8 +67,9 @@ def _procesar_con_pyzbar_o_cv(img):
                     return barcode_data
         except Exception:
             pass
+        return None
 
-    # Fallback a OpenCV BarcodeDetector
+    # Fallback a OpenCV BarcodeDetector solo si pyzbar no está instalado
     if _cv_barcode_detector is not None:
         try:
             ok, decoded_info, decoded_type, _ = _cv_barcode_detector.detectAndDecode(img)

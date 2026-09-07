@@ -109,6 +109,8 @@ def main():
 
     while True:
         ret, frame = cap.read() if cap is not None and cap.isOpened() else (True, None)
+        if frame is not None:
+            frame = cv2.resize(frame, (640, 480))
 
         # Si no hay cámara física disponible, crear un canvas sintético para pruebas de laboratorio
         if frame is None:
