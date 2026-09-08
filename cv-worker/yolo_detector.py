@@ -13,33 +13,27 @@ except ImportError:
 
 class DetectorYOLO:
     def __init__(self, model_path="yolov8n.pt", conf_thresh=0.45):
+        import torch
         self.conf_thresh = conf_thresh
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = None
         if ULTRALYTICS_AVAILABLE:
             try:
                 self.model = YOLO(model_path)
-                logger.info(f"Modelo YOLOv8 cargado exitosamente desde {model_path}")
+                if hasattr(self.model, 'to'):
+                    self.model.to(self.device)
+                device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+                logger.info(f"Modelo YOLOv8 cargado exitosamente en GPU/Dispositivo: '{self.device}' ({device_name})")
             except Exception as e:
                 logger.error(f"No se pudo cargar el modelo YOLO ({e}). Usando fallback de contornos.")
 
     def detectar_objetos(self, frame):
-        """
-        Inferencia de YOLOv8 sobre el frame.
-        Retorna lista de diccionarios:
-        [
-           {
-               "clase": "coca_cola",
-               "confianza": 0.92,
-               "bbox": {"x": 100, "y": 50, "w": 200, "h": 300}
-           }
-        ]
-        """
         if frame is None:
             return []
 
         if self.model is not None:
             try:
-                results = self.model(frame, conf=self.conf_thresh, verbose=False)
+                results = self.model.predict(frame, conf=self.conf_thresh, device=self.device, imgsz=320, verbose=False, stream=True)
                 detecciones = []
                 for r in results:
                     boxes = r.boxes

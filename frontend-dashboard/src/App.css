@@ -1,7 +1,8 @@
 :root {
-  --bg: #0B0E1A;
-  --card: #151A2E;
-  --card-border: rgba(255, 255, 255, 0.07);
+  --bg: #0A0C16;
+  --card: #141930;
+  --card-hover: #181e3a;
+  --card-border: rgba(255, 255, 255, 0.08);
   --text: #F4F5F7;
   --text-dim: #8B92B0;
   --purple: #8B5CF6;
@@ -9,6 +10,15 @@
   --teal: #22D3B9;
   --amber: #F5A623;
   --red: #F43F5E;
+  --green: #10B981;
+
+  --font-heading: 'Plus Jakarta Sans', 'Segoe UI', -apple-system, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24), 0 8px 24px -12px rgba(0, 0, 0, 0.45);
+  --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.3), 0 16px 32px -14px rgba(0, 0, 0, 0.55);
+  --shadow-glow-purple: 0 4px 20px -4px rgba(139, 92, 246, 0.35);
 }
 
 * {
@@ -19,7 +29,7 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--text);
-  font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+  font-family: var(--font-body);
   background-color: var(--bg);
   background-image:
     radial-gradient(ellipse 700px 500px at 8% -5%, rgba(139, 92, 246, 0.16), transparent 60%),
@@ -40,9 +50,10 @@ body {
 
 .main-top-navbar {
   height: 64px;
-  background: rgba(21, 26, 46, 0.9);
+  background: rgba(16, 20, 38, 0.92);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.28);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -66,15 +77,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-heading);
   font-weight: 800;
   color: #fff;
   font-size: 0.95rem;
+  box-shadow: var(--shadow-glow-purple);
 }
 
 .navbar-app-title {
   display: block;
+  font-family: var(--font-heading);
   font-weight: 700;
   font-size: 1rem;
+  letter-spacing: -0.01em;
   color: #F4F5F7;
 }
 
@@ -106,17 +121,22 @@ body {
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .nav-tab-btn:hover {
   color: #F4F5F7;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .nav-tab-btn.active {
   background: linear-gradient(135deg, #8B5CF6 0%, #0284c7 100%);
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+}
+
+.nav-tab-btn.active:hover {
+  background: linear-gradient(135deg, #8B5CF6 0%, #0284c7 100%);
 }
 
 .navbar-status-badge {
@@ -204,8 +224,10 @@ body {
 }
 
 .board-header h1 {
+  font-family: var(--font-heading);
   font-size: 1.5rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
   margin: 0;
   color: var(--text);
 }
@@ -296,15 +318,16 @@ body {
 }
 
 .filtro-rango button {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
+  font-weight: 500;
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: 8px;
   padding: 0.45rem 0.9rem;
   cursor: pointer;
   color: var(--text-dim);
-  transition: all 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .filtro-rango button:hover {
@@ -336,6 +359,14 @@ body {
   padding: 1.1rem 1.3rem;
   flex: 1;
   min-width: 180px;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .stat-icon {
@@ -349,21 +380,22 @@ body {
   flex-shrink: 0;
 }
 
-.icon-purple { background: rgba(139, 92, 246, 0.18); }
-.icon-blue { background: rgba(56, 189, 248, 0.18); }
-.icon-teal { background: rgba(34, 211, 185, 0.18); }
+.icon-purple { background: rgba(139, 92, 246, 0.18); border: 1px solid rgba(139, 92, 246, 0.3); }
+.icon-blue { background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.3); }
+.icon-teal { background: rgba(34, 211, 185, 0.18); border: 1px solid rgba(34, 211, 185, 0.3); }
 
 .stat-label {
   display: block;
   font-size: 0.7rem;
   color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  font-weight: 600;
 }
 
 .stat-value {
   display: block;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text);
@@ -376,9 +408,17 @@ body {
   border-radius: 14px;
   padding: 1.25rem 1.4rem;
   margin: 1.5rem 0;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.chart-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: rgba(255, 255, 255, 0.13);
 }
 
 .chart-card h2 {
+  font-family: var(--font-heading);
   font-size: 0.95rem;
   font-weight: 700;
   margin: 0 0 0.75rem;
@@ -403,9 +443,17 @@ body {
   border: 1px solid var(--card-border);
   border-radius: 14px;
   padding: 1.25rem 1.4rem;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.panel-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: rgba(255, 255, 255, 0.13);
 }
 
 .panel-card h2 {
+  font-family: var(--font-heading);
   font-size: 0.95rem;
   font-weight: 700;
   margin: 0 0 0.9rem;
@@ -422,8 +470,15 @@ body {
 
 /* --- Fila de producto con barra de stock --- */
 .row-stock {
-  padding: 0.7rem 0;
+  padding: 0.7rem 0.5rem;
+  margin: 0 -0.5rem;
   border-bottom: 1px solid var(--card-border);
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.row-stock:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .row-stock:last-child { border-bottom: none; }
@@ -443,6 +498,7 @@ body {
   flex-shrink: 0;
   background: #1E2438;
   border: 1px solid var(--card-border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .thumb-placeholder {
@@ -500,8 +556,15 @@ body {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  padding: 0.65rem 0;
+  padding: 0.65rem 0.5rem;
+  margin: 0 -0.5rem;
   border-bottom: 1px solid var(--card-border);
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.row-venta:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .row-venta:last-child { border-bottom: none; }
