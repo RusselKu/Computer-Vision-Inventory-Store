@@ -196,6 +196,10 @@ def main():
         else:
             frame = None
 
+        # Dev E: start at delivery to the processing loop (excludes camera hardware buffering).
+        captured_at_ms = time.time() * 1000
+        measurement_source = 'camera' if frame is not None else 'simulation'
+
         if frame is not None:
             frame = cv2.resize(frame, (640, 480))
 
@@ -280,6 +284,8 @@ def main():
 
                 payload = {
                     "venta_id": venta_id_actual,
+                    "captured_at_ms": captured_at_ms,
+                    "measurement_source": measurement_source,
                     "codigo_barras": codigo_detectado,
                     "clase_yolo": clase_yolo,
                     "confianza": confianza_yolo,
@@ -300,6 +306,8 @@ def main():
 
                 payload = {
                     "venta_id": venta_id_actual,
+                    "captured_at_ms": captured_at_ms,
+                    "measurement_source": measurement_source,
                     "codigo_barras": codigo_visual,
                     "clase_yolo": clase_yolo,
                     "confianza": round(float(sim_visual), 2),
@@ -329,6 +337,8 @@ def main():
                     # 2) Enviar alerta de fallback al Backend (async: no bloquear cámara)
                     payload = {
                         "venta_id": venta_id_actual,
+                    "captured_at_ms": captured_at_ms,
+                    "measurement_source": measurement_source,
                         "confianza": confianza_yolo,
                         "bounding_box": bbox_actual,
                         "es_fallback": True,
@@ -437,6 +447,8 @@ def main():
             logger.info(f"Simulando lectura de Código de Barras: '{prod['nombre']}' ({prod['codigo']})...")
             payload = {
                 "venta_id": venta_id_actual,
+                "captured_at_ms": captured_at_ms,
+                "measurement_source": "simulation",
                 "codigo_barras": prod["codigo"],
                 "clase_yolo": prod["clase"],
                 "confianza": 0.98,
@@ -457,6 +469,8 @@ def main():
             logger.info(f"★ ¡Reconocimiento Vectorial Visual Exitoso!: '{prod['nombre']}' (Similitud Coseno ResNet18: {round(sim_pct*100, 1)}%)")
             payload = {
                 "venta_id": venta_id_actual,
+                "captured_at_ms": captured_at_ms,
+                "measurement_source": "simulation",
                 "codigo_barras": prod["codigo"],
                 "clase_yolo": prod["clase"],
                 "confianza": round(float(sim_pct), 2),
@@ -470,6 +484,8 @@ def main():
             logger.info("Simulando disparo de alerta de Fallback...")
             payload = {
                 "venta_id": venta_id_actual,
+                "captured_at_ms": captured_at_ms,
+                "measurement_source": "simulation",
                 "confianza": 0.70,
                 "bounding_box": {"x": 150, "y": 100, "w": 200, "h": 300},
                 "es_fallback": True,

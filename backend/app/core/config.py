@@ -1,6 +1,6 @@
 import os
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Redis (Local Docker)
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
+    OFFLINE_DB_PATH: str = "data/pos-outbox.sqlite3"
+    SYNC_INTERVAL_SECONDS: int = Field(default=5, ge=1, le=300)
+    SUPABASE_TIMEOUT_SECONDS: float = Field(default=3.0, gt=0, le=10)
 
     # CORS
     CORS_ORIGINS: List[str] = ["*"]

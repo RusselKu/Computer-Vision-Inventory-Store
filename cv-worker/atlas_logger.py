@@ -22,7 +22,8 @@ class AtlasLogger:
 
         if PYMONGO_AVAILABLE and MONGODB_URI:
             try:
-                self.client = pymongo.MongoClient(MONGODB_URI, serverSelectionTimeoutMS=3000)
+                self.client = pymongo.MongoClient(MONGODB_URI, serverSelectionTimeoutMS=3000, socketTimeoutMS=3000)
+                self.client.admin.command('ping')
                 self.db = self.client[MONGODB_DB_NAME]
                 self.collection = self.db[MONGODB_COLLECTION]
                 logger.info(f"Conectado exitosamente a MongoDB Atlas ({MONGODB_DB_NAME}.{MONGODB_COLLECTION})")
