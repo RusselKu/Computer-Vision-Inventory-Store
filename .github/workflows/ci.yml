@@ -29,15 +29,25 @@ jobs:
       - name: Validate Docker Compose configuration
         run: |
           cp .env.example .env
-          docker compose config
+          docker compose config --quiet
 
-      - name: Run Backend Pytest Suite
-        env:
-          PYTHONPATH: backend
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://klsqlozvtgqsruwfrkss.supabase.co' }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsc3Fsb3p2dGdxc3J1d2Zya3NzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1NTk2NjUsImV4cCI6MjEwNDEzNTY2NX0.llyR5BzDC6QT8OKhXXWkRZn9lwN5GB96oH6fRtQLYYk' }}
-        run: |
-          pytest backend/tests/test_api.py -v
+      - name: Run isolated backend tests
+        run: pytest -q
+
+  frontend-build:
+    name: Build unified POS dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend-dashboard/package-lock.json
+      - run: npm ci
+        working-directory: frontend-dashboard
+      - run: npm run build
+        working-directory: frontend-dashboard
 
   docker-build:
     name: Build Docker Images

@@ -1,5 +1,7 @@
 # Variables de entorno y secretos
 .env
+.env.local
+.env.*.local
 mcp_config.json
 
 # Python y entornos virtuales
@@ -29,3 +31,7 @@ htmlcov/
 scratch/
 test_cam*.jpg
 ciel.json
+data/
+node_modules/
+dist/
+reports/

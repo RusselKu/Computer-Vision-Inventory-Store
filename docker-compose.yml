@@ -14,8 +14,15 @@ services:
       - PORT=8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - OFFLINE_DB_PATH=/data/pos-outbox.sqlite3
     volumes:
       - ./backend:/app
+      - pos-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/live"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
     depends_on:
       - redis
     networks:
@@ -26,11 +33,36 @@ services:
     container_name: pos_redis_cache
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    networks:
+      - pos-network
+
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - pos-network
 
 networks:
   pos-network:
     driver: bridge
+
+volumes:
+  pos-data:
+  mongo-data:

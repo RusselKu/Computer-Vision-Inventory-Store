@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from app.core.supabase import get_supabase_client
 from app.models.venta import ItemVentaCreate, MetodoDeteccion, MetodoPago
 from app.services.productos_service import ProductosService
+from app.services.checkout_queue import get_checkout_queue, is_transient, serialize_sale
 
 
 class VentasService:
@@ -37,6 +38,25 @@ class VentasService:
 
     @staticmethod
     def obtener_venta(venta_id: UUID) -> dict:
+        queue = get_checkout_queue()
+        try:
+            venta = VentasService._obtener_venta_remota(venta_id)
+            queue.cache(venta)
+        except Exception as error:
+            venta = queue.cached(venta_id) if is_transient(error) else None
+            if venta is None:
+                raise
+            venta['sync_status'] = 'offline'
+        entry = queue.get(venta_id)
+        if entry:
+            venta['sync_status'] = entry['state']
+            if entry['state'] == 'synced':
+                venta['estado'] = 'completada'
+                venta['metodo_pago'] = entry['metodo_pago']
+        return venta
+
+    @staticmethod
+    def _obtener_venta_remota(venta_id: UUID) -> dict:
         supabase = get_supabase_client()
         res = supabase.table("ventas").select("*").eq("id", str(venta_id)).execute()
         if not res.data:
@@ -56,6 +76,22 @@ class VentasService:
 
     @staticmethod
     def listar_ventas(estado: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[dict]:
+        queue = get_checkout_queue()
+        try:
+            sales = VentasService._listar_ventas_remotas(estado, limit, offset)
+        except Exception as error:
+            if not is_transient(error):
+                raise
+            return queue.cached_sales(estado, limit, offset)
+        for sale in sales:
+            queue.cache(sale)
+            entry = queue.get(sale['id'])
+            if entry:
+                sale['sync_status'] = entry['state']
+        return sales
+
+    @staticmethod
+    def _listar_ventas_remotas(estado: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[dict]:
         supabase = get_supabase_client()
         query = supabase.table("ventas").select("*, items:detalle_ventas(*, producto:productos(*))").order("created_at", desc=True)
         if estado:
@@ -64,7 +100,9 @@ class VentasService:
         return res.data or []
 
     @staticmethod
+    @serialize_sale
     def agregar_item(venta_id: UUID, item_data: ItemVentaCreate) -> dict:
+        get_checkout_queue().assert_editable(venta_id)
         supabase = get_supabase_client()
         venta = VentasService.obtener_venta(venta_id)
         if venta["estado"] != "abierta":
@@ -135,7 +173,9 @@ class VentasService:
         return VentasService.obtener_venta(venta_id)
 
     @staticmethod
+    @serialize_sale
     def eliminar_item(venta_id: UUID, item_id: UUID) -> dict:
+        get_checkout_queue().assert_editable(venta_id)
         supabase = get_supabase_client()
         venta = VentasService.obtener_venta(venta_id)
         if venta["estado"] != "abierta":
@@ -151,7 +191,9 @@ class VentasService:
         return VentasService.obtener_venta(venta_id)
 
     @staticmethod
+    @serialize_sale
     def actualizar_cantidad_item(venta_id: UUID, item_id: UUID, nueva_cantidad: int) -> dict:
+        get_checkout_queue().assert_editable(venta_id)
         supabase = get_supabase_client()
         venta = VentasService.obtener_venta(venta_id)
         if venta["estado"] != "abierta":
@@ -184,34 +226,19 @@ class VentasService:
 
     @staticmethod
     def cerrar_venta(venta_id: UUID, metodo_pago: MetodoPago = MetodoPago.EFECTIVO) -> dict:
-        supabase = get_supabase_client()
-        # Invocamos la función almacenada atómica en Postgres: fn_cerrar_venta
-        try:
-            rpc_res = supabase.rpc("fn_cerrar_venta", {
-                "p_venta_id": str(venta_id),
-                "p_metodo_pago": metodo_pago.value
-            }).execute()
-
-            data = rpc_res.data
-            return {
-                "success": True,
-                "venta_id": venta_id,
-                "folio": data.get("folio", ""),
-                "total": float(data.get("total", 0.0)),
-                "estado": data.get("estado", "completada"),
-                "metodo_pago": data.get("metodo_pago", metodo_pago.value),
-                "mensaje": "Venta completada e inventario descontado con éxito en Supabase."
-            }
-        except Exception as e:
-            err_msg = str(e)
-            # Extraer mensaje de excepción de PostgreSQL si existe
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Error al cerrar la venta: {err_msg}"
-            )
+        queue = get_checkout_queue()
+        with queue.lock:
+            entry = queue.get(venta_id)
+            snapshot = None
+            if not entry or entry['state'] == 'rejected':
+                snapshot = VentasService.obtener_venta(venta_id)
+            queue.enqueue(venta_id, metodo_pago.value, snapshot)
+            return queue.process(venta_id)
 
     @staticmethod
+    @serialize_sale
     def cancelar_venta(venta_id: UUID) -> dict:
+        get_checkout_queue().assert_editable(venta_id)
         supabase = get_supabase_client()
         venta = VentasService.obtener_venta(venta_id)
         if venta["estado"] != "abierta":

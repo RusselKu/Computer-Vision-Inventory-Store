@@ -53,6 +53,8 @@ async def recibir_deteccion_cv(evento: CVDetectionEvent):
         mensaje_alerta = evento.mensaje_error or "Detección fallida o no concluyente. Requiere captura manual."
         await broadcast_pos_event(str(evento.venta_id), {
             "type": "ALERTA_CV_FALLBACK",
+            "captured_at_ms": evento.captured_at_ms,
+            "measurement_source": evento.measurement_source,
             "mensaje": mensaje_alerta,
             "confianza": evento.confianza,
             "bounding_box": evento.bounding_box.model_dump() if evento.bounding_box else None
@@ -101,6 +103,8 @@ async def recibir_deteccion_cv(evento: CVDetectionEvent):
         # Notificar en tiempo real al POS por WebSocket
         await broadcast_pos_event(str(evento.venta_id), {
             "type": "ITEM_AGREGADO_CV",
+            "captured_at_ms": evento.captured_at_ms,
+            "measurement_source": evento.measurement_source,
             "producto": prod_agregado,
             "metodo": metodo.value,
             "confianza": evento.confianza,

@@ -1,5 +1,8 @@
 # Guía del Equipo — POS con Reconocimiento de Producto por Visión Computacional
 
+> Dev E: consultar [DOCUMENTACION_DEV_E.md](DOCUMENTACION_DEV_E.md) para la cola
+> persistente de cierres, el contrato HTTP 202, arranque y pruebas de carga/latencia.
+
 Bienvenido al repositorio central de **Computer-Vision-Inventory-Store**. Este documento detalla la arquitectura implementada por **Dev A (Backend Core)** y establece los contratos, endpoints y pasos a seguir para el resto del equipo (**Dev B, Dev C, Dev D y Dev E**).
 
 ---

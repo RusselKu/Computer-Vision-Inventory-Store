@@ -1,0 +1,4 @@
+-r backend/requirements.txt
+locust>=2.31,<3
+pymongo>=4.8,<5
+pyyaml>=6,<7

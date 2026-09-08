@@ -1,9 +1,23 @@
 from contextlib import asynccontextmanager
+import asyncio
+import logging
+import httpx
+from fastapi.responses import JSONResponse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.supabase import get_supabase_client
+from app.services.checkout_queue import get_checkout_queue
+
+
+async def sync_loop():
+    while True:
+        try:
+            await asyncio.to_thread(get_checkout_queue().drain)
+        except Exception:
+            logging.getLogger(__name__).exception('No se pudo ejecutar la sincronización local')
+        await asyncio.sleep(max(1, settings.SYNC_INTERVAL_SECONDS))
 
 
 @asynccontextmanager
@@ -16,7 +30,16 @@ async def lifespan(app: FastAPI):
         print(f"[STARTUP] Conexión con Supabase exitosa. ({len(res.data)} productos comprobados)")
     except Exception as e:
         print(f"[WARNING] No se pudo verificar Supabase al inicio: {e}")
-    yield
+    get_checkout_queue()
+    task = asyncio.create_task(sync_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     print("[SHUTDOWN] Cerrando servicios de FastAPI POS Core.")
 
 
@@ -28,6 +51,13 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan
 )
+
+
+@app.exception_handler(httpx.TransportError)
+async def connection_unavailable(request, error):
+    return JSONResponse(status_code=503, content={
+        'detail': 'Supabase no está disponible. Solo se pueden consultar carritos guardados y encolar su cierre.'
+    })
 
 # Configuración de CORS
 app.add_middleware(
@@ -64,11 +94,21 @@ def health_check():
         supabase_status = f"error: {str(e)}"
 
     return {
-        "status": "healthy",
+        "status": "healthy" if supabase_status == "connected" else "degraded",
         "supabase": supabase_status,
         "database": "PostgreSQL (Supabase)",
         "realtime": "Enabled"
     }
+
+
+@app.get('/api/v1/resiliencia', tags=['Operaciones Dev E'])
+def resilience_status():
+    return get_checkout_queue().status()
+
+
+@app.get('/live', tags=['Health'])
+def liveness():
+    return {'status': 'alive'}
 
 
 if __name__ == "__main__":
