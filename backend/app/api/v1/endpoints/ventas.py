@@ -52,6 +52,7 @@ def eliminar_item(venta_id: UUID, item_id: UUID):
 
 
 @router.patch("/{venta_id}/items/{item_id}", response_model=VentaResponse, summary="Actualizar cantidad de un item")
+@router.put("/{venta_id}/items/{item_id}", response_model=VentaResponse, summary="Actualizar cantidad de un item (PUT alias)")
 def actualizar_cantidad_item(venta_id: UUID, item_id: UUID, payload: ItemVentaUpdate):
     """Modifica la cantidad de unidades de un producto en el carrito."""
     return VentasService.actualizar_cantidad_item(venta_id, item_id, payload.cantidad)

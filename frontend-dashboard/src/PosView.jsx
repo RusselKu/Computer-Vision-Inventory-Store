@@ -26,7 +26,6 @@ export default function PosView() {
   const [alertaFallback, setAlertaFallback] = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
   const [cargando, setCargando] = useState(false);
-
   const wsRef = useRef(null);
 
   // Iniciar venta al cargar la aplicación
@@ -78,6 +77,19 @@ export default function PosView() {
     };
   }, [venta?.id]);
 
+  // Polling de respaldo para mantener el carrito siempre actualizado en tiempo real
+  useEffect(() => {
+    if (!venta?.id) return;
+
+    // Si hay WebSocket activo, reducir polling a 5s para evitar renders innecesarios
+    const pollInterval = wsConnected ? 5000 : 2500;
+    const intervalId = setInterval(() => {
+      recargarVenta(venta.id);
+    }, pollInterval);
+
+    return () => clearInterval(intervalId);
+  }, [venta?.id, wsConnected]);
+
   const reproducirSonido = (tipo) => {
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -106,6 +118,18 @@ export default function PosView() {
   const iniciarNuevaVenta = async () => {
     setCargando(true);
     try {
+      // 1. Intentar sincronizar con una venta abierta existente
+      const resAbierta = await fetch(`${API_BASE}/ventas?estado=abierta&limit=1`);
+      if (resAbierta.ok) {
+        const abiertas = await resAbierta.json();
+        if (abiertas && abiertas.length > 0) {
+          setVenta(abiertas[0]);
+          setCargando(false);
+          return;
+        }
+      }
+
+      // 2. Si no hay venta abierta, crear nueva
       const res = await fetch(`${API_BASE}/ventas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,7 +229,7 @@ export default function PosView() {
 
     setCargando(true);
     try {
-      const res = await fetch(`${API_BASE}/ventas/${venta.id}/checkout`, {
+      const res = await fetch(`${API_BASE}/ventas/${venta.id}/cerrar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ metodo_pago: metodoPago })
@@ -351,6 +375,7 @@ export default function PosView() {
 
         {/* PANEL DERECHO: BUSQUEDA MANUAL Y RESUMEN DE COBRO */}
         <section className="pos-checkout-section">
+
           {/* BUSQUEDA MANUAL POR CODIGO */}
           <div className="pos-card pos-manual-card">
             <h3><Barcode className="w-5 h-5 inline mr-1 text-cyan-400" /> Búsqueda Manual</h3>
