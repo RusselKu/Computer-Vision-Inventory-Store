@@ -18,3 +18,7 @@ htmlcov/
 *.log
 .vscode/
 .idea/
+.agents
+.mcp.json
+AGENTS.md
+yolov8n.pt

@@ -99,3 +99,15 @@ class ProductosService:
         if not res.data:
             return None
         return ProductosService.obtener_por_id(producto_id)
+
+    @staticmethod
+    def buscar_por_vector(vector: List[float], umbral: float = 0.75, limite: int = 1) -> List[dict]:
+        """Busca productos similares en Supabase mediante similitud de coseno (pgvector)."""
+        supabase = get_supabase_client()
+        res = supabase.rpc("buscar_producto_por_vector", {
+            "query_embedding": vector,
+            "match_threshold": umbral,
+            "match_count": limite
+        }).execute()
+        return res.data or []
+

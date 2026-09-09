@@ -16,8 +16,8 @@ async def recibir_deteccion_cv(evento: CVDetectionEvent):
     - Si la detección fue exitosa, inyecta el producto al carrito de la venta activa y notifica por WebSocket.
     - Si es fallback o baja confianza, genera una alerta para que el POS solicite captura manual.
     """
-    # 1. Manejo de Fallback (Lectura fallida tras N frames)
-    if evento.es_fallback or (not evento.codigo_barras and not evento.clase_yolo):
+    # 1. Manejo de Fallback (Lectura fallida tras N frames o evento sin datos)
+    if evento.es_fallback or (not evento.codigo_barras and not evento.clase_yolo and not evento.vector):
         mensaje_alerta = evento.mensaje_error or "Detección fallida o no concluyente. Requiere captura manual."
         await broadcast_pos_event(str(evento.venta_id), {
             "type": "ALERTA_CV_FALLBACK",
@@ -35,7 +35,16 @@ async def recibir_deteccion_cv(evento: CVDetectionEvent):
     codigo_a_buscar = evento.codigo_barras
     metodo = MetodoDeteccion.CV_BARCODE if evento.codigo_barras else MetodoDeteccion.CV_YOLO
 
-    # Si solo viene clase YOLO, se podría buscar por mapeo o nombre de clase
+    # Si no hay código de barras pero se envió vector embedding, buscar en Supabase (pgvector)
+    if not codigo_a_buscar and evento.vector:
+        matches = ProductosService.buscar_por_vector(evento.vector, umbral=0.75, limite=1)
+        if matches:
+            top_match = matches[0]
+            codigo_a_buscar = top_match["codigo_barras"]
+            evento.confianza = float(top_match.get("similitud", evento.confianza))
+            metodo = MetodoDeteccion.CV_YOLO
+
+    # Si solo viene clase YOLO y aún no hay código, buscar por coincidencia en catálogo
     if not codigo_a_buscar and evento.clase_yolo:
         prods = ProductosService.listar(q=evento.clase_yolo, limit=1)
         if prods:

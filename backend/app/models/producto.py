@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel, Field
 
@@ -40,3 +40,18 @@ class ProductoConInventario(ProductoResponse):
     stock_actual: int = 0
     stock_minimo: int = 5
     ubicacion: Optional[str] = None
+
+
+class VectorSearchRequest(BaseModel):
+    vector: List[float] = Field(..., description="Vector embedding de 512 dimensiones normalizado")
+    umbral: float = Field(default=0.75, ge=0.0, le=1.0, description="Umbral mínimo de similitud de coseno")
+    limite: int = Field(default=3, ge=1, le=20, description="Cantidad máxima de coincidencias")
+
+
+class VectorMatchResponse(BaseModel):
+    id: UUID
+    codigo_barras: str
+    nombre: str
+    precio: float
+    similitud: float
+

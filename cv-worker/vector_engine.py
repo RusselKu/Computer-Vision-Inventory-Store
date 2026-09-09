@@ -1,3 +1,6 @@
+import json
+import os
+import glob
 import torch
 import torchvision.transforms as T
 from torchvision.models import resnet18, ResNet18_Weights
@@ -5,6 +8,11 @@ from PIL import Image
 import numpy as np
 import cv2
 import logging
+
+try:
+    from config import SUPABASE_URL, SUPABASE_KEY
+except ImportError:
+    SUPABASE_URL, SUPABASE_KEY = "", ""
 
 logger = logging.getLogger("VectorEngine")
 
@@ -59,65 +67,93 @@ class VectorEngine:
             logger.error(f"Error extrayendo vector embedding: {e}")
             return None
 
+    def _cargar_catalogo_desde_supabase(self) -> bool:
+        """Intenta sincronizar los vectores 512d directamente desde Supabase (pgvector)."""
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return False
+
+        try:
+            from supabase import create_client
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            res = supabase.table("productos").select("id, codigo_barras, nombre, categoria, embedding").eq("activo", True).execute()
+            
+            cargados = 0
+            for row in (res.data or []):
+                raw_emb = row.get("embedding")
+                if not raw_emb:
+                    continue
+                
+                # Convertir lista o string de pgvector a numpy array
+                if isinstance(raw_emb, str):
+                    raw_emb = json.loads(raw_emb)
+                vec = np.array(raw_emb, dtype=np.float32)
+                norm = np.linalg.norm(vec)
+                if norm > 0:
+                    vec = vec / norm
+                
+                self.catalogo_vectores[row["codigo_barras"]] = {
+                    "id": row["id"],
+                    "codigo": row["codigo_barras"],
+                    "nombre": row["nombre"],
+                    "clase": row.get("categoria", "producto"),
+                    "vector": vec
+                }
+                cargados += 1
+                
+            if cargados > 0:
+                logger.info(f"✓ Sincronizados {cargados} vectores de productos directamente desde Supabase (pgvector).")
+                return True
+        except Exception as e:
+            logger.warning(f"No se pudo cargar vectores desde Supabase ({e}). Usando fallback de imágenes locales...")
+            
+        return False
+
     def _inicializar_catalogo_referencia(self):
-        """Carga vectores de firma reales desde el dataset local SetImagenesBuenas/ si existe."""
-        import os
-        import glob
-        
-        logger.info("Generando firma de vectores base para productos del catálogo...")
+        """Inicializa vectores desde Supabase o calculando centroides desde SetImagenesBuenas/."""
+        # 1. Intentar cargar desde la base de datos Supabase
+        if self._cargar_catalogo_desde_supabase():
+            return
+
+        # 2. Fallback: computar vectores reales desde dataset local si la DB no responde
         dataset_dir = "SetImagenesBuenas"
+        if not os.path.exists(dataset_dir):
+            dataset_dir = os.path.join(os.path.dirname(__file__), "..", "SetImagenesBuenas")
         
         mapping_dirs = {
             "CocaColaSet": {"codigo": "7501055312107", "nombre": "Coca-Cola Original 600ml", "clase": "coca_cola"},
             "SabritasPapas": {"codigo": "7501000111203", "nombre": "Sabritas Sal 45g", "clase": "sabritas"},
             "RuflesQueso": {"codigo": "7501000122209", "nombre": "Ruffles Queso 50g", "clase": "ruffles"},
             "GalletasChokis": {"codigo": "7501011115481", "nombre": "Galletas Chokis 76g", "clase": "chokis"},
-            "BoteAgua": {"codigo": "7501020512110", "nombre": "Agua Ciel Purificada 1L", "clase": "agua"},
+            "BoteAgua": {"codigo": "7501020512110", "nombre": "Agua e·pura Purificada 1L", "clase": "agua"},
         }
 
-        cargados = 0
         if os.path.exists(dataset_dir):
+            logger.info("Calculando vectores centroides desde imágenes de SetImagenesBuenas/...")
             for folder, info in mapping_dirs.items():
                 folder_path = os.path.join(dataset_dir, folder)
                 if os.path.exists(folder_path):
+                    vecs_producto = []
                     for img_file in glob.glob(os.path.join(folder_path, "*.*")):
                         img = cv2.imread(img_file)
                         if img is not None:
                             vec = self.extraer_vector(img)
                             if vec is not None:
-                                self.catalogo_vectores[f"{info['codigo']}_{os.path.basename(img_file)}"] = {
-                                    "codigo": info["codigo"],
-                                    "nombre": info["nombre"],
-                                    "clase": info["clase"],
-                                    "vector": vec
-                                }
-                                cargados += 1
-            if cargados > 0:
-                logger.info(f"✓ Cargados {cargados} vectores reales desde el dataset 'SetImagenesBuenas/'.")
-                return
+                                vecs_producto.append(vec)
+                    if vecs_producto:
+                        centroide = np.mean(vecs_producto, axis=0)
+                        centroide = centroide / np.linalg.norm(centroide)
+                        self.catalogo_vectores[info["codigo"]] = {
+                            "codigo": info["codigo"],
+                            "nombre": info["nombre"],
+                            "clase": info["clase"],
+                            "vector": centroide
+                        }
+            logger.info(f"✓ Inicializados {len(self.catalogo_vectores)} vectores centroides desde imágenes locales.")
 
-        # Fallback a firmas base sintéticas si no se encuentra el dataset
-        np.random.seed(42)
-        productos_base = [
-            {"codigo": "7501000111203", "nombre": "Sabritas Sal 45g", "clase": "sabritas"},
-            {"codigo": "7501000153036", "nombre": "Doritos Nacho 58g", "clase": "doritos"},
-            {"codigo": "7501055312107", "nombre": "Coca-Cola 600ml", "clase": "coca_cola"},
-        ]
-
-        for prod in productos_base:
-            vec = np.random.randn(512).astype(np.float32)
-            vec = vec / np.linalg.norm(vec)
-            self.catalogo_vectores[prod["codigo"]] = {
-                "codigo": prod["codigo"],
-                "nombre": prod["nombre"],
-                "clase": prod["clase"],
-                "vector": vec
-            }
-
-    def buscar_producto_por_vector(self, vector_query, umbral_similitud=0.75):
+    def buscar_producto_por_vector(self, vector_query, umbral_similitud=0.78):
         """
         Compara un vector contra el catálogo mediante Similitud de Coseno.
-        Retorna (producto_match, porcentaje_similitud).
+        Retorna (producto_match, porcentaje_similitud) si supera el umbral, sino (None, max_similitud).
         """
         if vector_query is None or len(self.catalogo_vectores) == 0:
             return None, 0.0
@@ -136,5 +172,6 @@ class VectorEngine:
 
         if max_similitud >= umbral_similitud:
             return mejor_match, max_similitud
-        
-        return mejor_match, max_similitud
+
+        return None, max_similitud
+

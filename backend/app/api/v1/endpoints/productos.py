@@ -1,7 +1,10 @@
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
-from app.models.producto import ProductoConInventario, ProductoCreate, ProductoResponse, ProductoUpdate
+from app.models.producto import (
+    ProductoConInventario, ProductoCreate, ProductoResponse, ProductoUpdate,
+    VectorSearchRequest, VectorMatchResponse
+)
 from app.services.productos_service import ProductosService
 
 router = APIRouter(prefix="/productos", tags=["Productos & Catálogo"])
@@ -52,3 +55,17 @@ def actualizar_producto(producto_id: UUID, data: ProductoUpdate):
     if not prod:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Producto {producto_id} no encontrado")
     return prod
+
+
+@router.post("/buscar-vector", response_model=List[VectorMatchResponse], summary="Buscar productos por similitud vectorial (pgvector)")
+def buscar_por_vector(req: VectorSearchRequest):
+    """
+    Compara un vector embedding de 512 dimensiones contra la base de datos Supabase
+    usando similitud de coseno y retorna los productos más cercanos.
+    """
+    return ProductosService.buscar_por_vector(
+        vector=req.vector,
+        umbral=req.umbral,
+        limite=req.limite
+    )
+

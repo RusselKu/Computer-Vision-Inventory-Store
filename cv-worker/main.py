@@ -1,3 +1,4 @@
+import os
 import cv2
 import time
 import requests
@@ -63,6 +64,33 @@ def enviar_deteccion_api(payload):
     return None
 
 
+def abrir_camara(index):
+    """Abre la cámara probando DirectShow primero (óptimo y rápido en Windows) y luego backend estándar."""
+    try:
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            ret, test_frame = cap.read()
+            if ret and test_frame is not None:
+                return cap
+            cap.release()
+    except Exception:
+        pass
+
+    try:
+        cap = cv2.VideoCapture(index)
+        if cap.isOpened():
+            ret, test_frame = cap.read()
+            if ret and test_frame is not None:
+                return cap
+            cap.release()
+    except Exception:
+        pass
+
+    return None
+
+
 def main():
     logger.info("==========================================================")
     logger.info("   Worker de Visión por Computadora — POS CV System       ")
@@ -74,16 +102,29 @@ def main():
     atlas = AtlasLogger()
     vector_engine = VectorEngine()
 
-    # 2. Iniciar Captura de Video (o modo simulación estricto)
+    # 2. Iniciar Captura de Video con Auto-Detección y DirectShow
     cap = None
-    if not USE_SIMULATION and CAMERA_INDEX >= 0:
-        cap = cv2.VideoCapture(CAMERA_INDEX)
-        if not cap.isOpened():
-            logger.error(f"No se pudo abrir la cámara index {CAMERA_INDEX}.")
-            cap = None
+    cam_index_actual = CAMERA_INDEX
 
-    if cap is None:
-        logger.info("▶ MODO SIMULACIÓN ACTIVO (La cámara de la laptop no se activará).")
+    if not USE_SIMULATION and cam_index_actual >= 0:
+        logger.info(f"Conectando a la cámara configurada (Index {cam_index_actual})...")
+        cap = abrir_camara(cam_index_actual)
+        if cap is None:
+            logger.warning(f"No se pudo abrir cámara en index {cam_index_actual}. Buscando en otros índices disponibles [1, 0, 2]...")
+            for fallback_idx in [1, 0, 2]:
+                if fallback_idx != cam_index_actual:
+                    cap = abrir_camara(fallback_idx)
+                    if cap is not None:
+                        cam_index_actual = fallback_idx
+                        logger.info(f"✓ ¡Cámara detectada y conectada automáticamente en Index {fallback_idx}!")
+                        break
+
+    if cap is not None:
+        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        logger.info(f"✓ Cámara activa en Index {cam_index_actual} ({actual_w}x{actual_h}). Transmitiendo video en vivo.")
+    else:
+        logger.info("▶ MODO SIMULACIÓN ACTIVO (Presione 'T' para activar cámara física).")
         logger.info("  Presione 'S' para simular lectura de producto, 'V' para vectorización, 'F' para fallback.")
 
     logger.info("\nControles de Teclado:")
@@ -102,9 +143,11 @@ def main():
 
     sim_product_index = 0
     sim_productos = [
-        {"codigo": "7501000111203", "clase": "sabritas", "nombre": "Sabritas Sal 45g"},
-        {"codigo": "7501000153036", "clase": "doritos", "nombre": "Doritos Nacho 58g"},
-        {"codigo": "7501055312107", "clase": "coca_cola", "nombre": "Coca-Cola 600ml"},
+        {"codigo": "7501055312107", "clase": "coca_cola", "nombre": "Coca-Cola Original 600ml", "img": "SetImagenesBuenas/CocaColaSet/Cocacolanormal.jpg"},
+        {"codigo": "7501000111203", "clase": "sabritas", "nombre": "Sabritas Sal 45g", "img": "SetImagenesBuenas/SabritasPapas/Papasnormal.png"},
+        {"codigo": "7501000122209", "clase": "ruffles", "nombre": "Ruffles Queso 50g", "img": "SetImagenesBuenas/RuflesQueso/Rufles1.jpg"},
+        {"codigo": "7501020512110", "clase": "agua", "nombre": "Agua e·pura Purificada 1L", "img": "SetImagenesBuenas/BoteAgua/AguaEpura.jpg"},
+        {"codigo": "7501011115481", "clase": "chokis", "nombre": "Galletas Chokis 76g", "img": "SetImagenesBuenas/GalletasChokis/Chokis1.png"},
     ]
 
     while True:
@@ -154,7 +197,7 @@ def main():
             # 4. Intentar decodificar código de barras primero
             codigo_detectado = decodificar_codigo_barras(frame, bbox=bbox_actual)
 
-            # 5. Si no hay código de barras, RECONOCER VISUALMENTE POR VECTOR DE EMBEDDINGS (ResNet18 / YOLO)
+            # 5. Si no hay código de barras, RECONOCER VISUALMENTE POR VECTOR DE EMBEDDINGS (ResNet18 / Supabase)
             reconocimiento_visual_match = None
             if not codigo_detectado and bbox_actual:
                 # Recortar ROI del producto detectado
@@ -162,17 +205,15 @@ def main():
                 roi = frame[max(0, y):max(0, y+h), max(0, x):max(0, x+w)]
                 if roi.size > 0:
                     vec = vector_engine.extraer_vector(roi)
-                    match_data, sim_score = vector_engine.buscar_producto_por_vector(vec)
-                    
-                    # O mapear clases de YOLO conocidas (bottle -> Coca-Cola, etc.)
-                    if clase_yolo in ("bottle", "coca_cola"):
-                        reconocimiento_visual_match = {"codigo": "7501055312107", "nombre": "Coca-Cola Original 600ml", "clase": "coca_cola", "sim": 0.92}
-                    elif clase_yolo in ("cell phone", "sabritas", "snack"):
-                        reconocimiento_visual_match = {"codigo": "7501000111203", "nombre": "Sabritas Sal 45g", "clase": "sabritas", "sim": 0.88}
-                    elif clase_yolo in ("doritos", "bag", "box"):
-                        reconocimiento_visual_match = {"codigo": "7501000153036", "nombre": "Doritos Nacho 58g", "clase": "doritos", "sim": 0.87}
-                    elif match_data and sim_score >= 0.70:
-                        reconocimiento_visual_match = {"codigo": match_data["codigo"], "nombre": match_data["nombre"], "clase": match_data["clase"], "sim": sim_score}
+                    match_data, sim_score = vector_engine.buscar_producto_por_vector(vec, umbral_similitud=0.78)
+                    if match_data:
+                        reconocimiento_visual_match = {
+                            "codigo": match_data["codigo"],
+                            "nombre": match_data["nombre"],
+                            "clase": match_data.get("clase", clase_yolo),
+                            "sim": sim_score,
+                            "vector": vec.tolist() if vec is not None else None
+                        }
 
             if codigo_detectado:
                 # Detección Exitosa por Código de Barras
@@ -205,6 +246,7 @@ def main():
                     "codigo_barras": codigo_visual,
                     "clase_yolo": clase_yolo,
                     "confianza": round(float(sim_visual), 2),
+                    "vector": reconocimiento_visual_match.get("vector"),
                     "bounding_box": bbox_actual,
                     "es_fallback": False
                 }
@@ -280,19 +322,33 @@ def main():
             logger.info("Cerrando worker de visión...")
             break
         elif key == ord('t'):
-            # Tecla T: Alternar en tiempo real entre Cámara de Laptop y Simulación
+            # Tecla T: Alternar en tiempo real entre Cámara Externa (Index 1), Integrada (Index 0) y Simulación
             if cap is not None and cap.isOpened():
                 cap.release()
                 cap = None
-                logger.info("▶ Modo alternado: CAMBIADO A SIMULACIÓN (Cámara liberada)")
-            else:
-                logger.info("▶ Modo alternado: Activando CÁMARA DE LAPTOP (Index 0)...")
-                cap = cv2.VideoCapture(CAMERA_INDEX)
-                if not cap.isOpened():
-                    logger.error(f"No se pudo acceder a la cámara en el index {CAMERA_INDEX}.")
-                    cap = None
+                siguiente_idx = 0 if cam_index_actual == 1 else 1
+                logger.info(f"▶ Cambiando de cámara... Probando Index {siguiente_idx}...")
+                nuevo_cap = abrir_camara(siguiente_idx)
+                if nuevo_cap is not None:
+                    cap = nuevo_cap
+                    cam_index_actual = siguiente_idx
+                    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    logger.info(f"✓ Cambiado exitosamente a Cámara Index {cam_index_actual} ({actual_w}x{actual_h}).")
                 else:
-                    logger.info("✓ Cámara de la laptop encendida y transmitiendo.")
+                    logger.info("▶ Pasando a MODO SIMULACIÓN (Cámara liberada).")
+            else:
+                logger.info("▶ Reactivando cámara física...")
+                for test_idx in [1, 0, 2]:
+                    cap = abrir_camara(test_idx)
+                    if cap is not None:
+                        cam_index_actual = test_idx
+                        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        logger.info(f"✓ Cámara conectada en Index {cam_index_actual} ({actual_w}x{actual_h}).")
+                        break
+                if cap is None:
+                    logger.error("No se pudo abrir ninguna cámara en los índices 1, 0 o 2.")
         elif key == ord('s'):
             # Tecla S: Simular escaneo por Código de Barras
             prod = sim_productos[sim_product_index % len(sim_productos)]
@@ -309,24 +365,42 @@ def main():
             enviar_deteccion_api(payload)
             last_action_time = time.time()
         elif key == ord('v'):
-            # Tecla V: Simular Reconocimiento VECTORIAL (ResNet18 Embeddings + Coseno)
-            prod = sim_productos[sim_product_index % len(sim_productos)]
+            # Tecla V: Evaluar Reconocimiento VECTORIAL Real (ResNet18 Embeddings + Supabase Catalog)
+            sample_prod = sim_productos[sim_product_index % len(sim_productos)]
             sim_product_index += 1
             
-            # Extraer vector de prueba
-            vec = vector_engine.extraer_vector(frame)
-            match, sim_pct = vector_engine.buscar_producto_por_vector(vec)
+            # Cargar imagen real de prueba del dataset o usar frame de cámara
+            img_to_test = None
+            if sample_prod.get("img") and os.path.exists(sample_prod["img"]):
+                img_to_test = cv2.imread(sample_prod["img"])
+            if img_to_test is None:
+                img_to_test = frame
+
+            vec = vector_engine.extraer_vector(img_to_test)
+            match, sim_pct = vector_engine.buscar_producto_por_vector(vec, umbral_similitud=0.75)
             
-            logger.info(f"★ ¡Reconocimiento Vectorial Visual Exitoso!: '{prod['nombre']}' (Similitud Coseno ResNet18: {round(sim_pct*100, 1)}%)")
-            payload = {
-                "venta_id": venta_id_actual,
-                "codigo_barras": prod["codigo"],
-                "clase_yolo": prod["clase"],
-                "confianza": round(float(sim_pct), 2),
-                "bounding_box": {"x": 150, "y": 100, "w": 200, "h": 300},
-                "es_fallback": False
-            }
-            enviar_deteccion_api(payload)
+            if match:
+                logger.info(f"★ ¡Reconocimiento Vectorial en Base de Datos Exitoso!: '{match['nombre']}' (Similitud: {round(sim_pct*100, 1)}%)")
+                payload = {
+                    "venta_id": venta_id_actual,
+                    "codigo_barras": match["codigo"],
+                    "clase_yolo": match.get("clase", sample_prod["clase"]),
+                    "confianza": round(float(sim_pct), 2),
+                    "vector": vec.tolist() if vec is not None else None,
+                    "bounding_box": {"x": 150, "y": 100, "w": 200, "h": 300},
+                    "es_fallback": False
+                }
+                enviar_deteccion_api(payload)
+            else:
+                logger.warning(f"⚠️ Similitud insuficiente ({round(sim_pct*100, 1)}%). Activando fallback...")
+                payload = {
+                    "venta_id": venta_id_actual,
+                    "confianza": round(float(sim_pct), 2),
+                    "bounding_box": {"x": 150, "y": 100, "w": 200, "h": 300},
+                    "es_fallback": True,
+                    "mensaje_error": f"Similitud vectorial insuficiente ({round(sim_pct*100, 1)}%)."
+                }
+                enviar_deteccion_api(payload)
             last_action_time = time.time()
         elif key == ord('f'):
             # Tecla F: Simular disparo del Fallback (Alerta manual al POS)
