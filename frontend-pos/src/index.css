@@ -341,11 +341,110 @@ body {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 16px;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  gap: 18px;
   height: 100%;
+  overflow-y: auto;
+}
+
+/* Visor de Cámara e IA Embebido */
+.pos-camera-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.pos-camera-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pos-camera-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.camera-live-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.camera-live-badge.live {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.camera-live-badge.idle {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.pos-camera-viewport {
+  width: 100%;
+  height: 170px;
+  background: #020617;
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pos-camera-stream {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.pos-camera-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  text-align: center;
+  padding: 12px;
+}
+
+.pos-camera-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.badge-detected {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.72rem;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .totals-breakdown {

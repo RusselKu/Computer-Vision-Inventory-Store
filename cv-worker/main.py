@@ -8,12 +8,14 @@ from uuid import UUID
 import concurrent.futures
 from config import (
     API_URL, CAMERA_INDEX, USE_SIMULATION, VENTA_ID, YOLO_MODEL_PATH, YOLO_CONF_THRESHOLD,
-    FALLBACK_FRAME_THRESHOLD, COOL_DOWN_SECONDS, PROCESS_EVERY_N_FRAMES, SHOW_DEBUG_WINDOW
+    FALLBACK_FRAME_THRESHOLD, COOL_DOWN_SECONDS, PROCESS_EVERY_N_FRAMES,
+    SHOW_CV2_WINDOW, SHOW_DEBUG_WINDOW, ENABLE_STREAM, STREAM_PORT, STREAM_HOST, VECTOR_SIMILARITY_THRESHOLD
 )
 from barcode_reader import decodificar_codigo_barras
 from yolo_detector import DetectorYOLO
 from atlas_logger import AtlasLogger
 from vector_engine import VectorEngine
+from streamer import start_stream_server, update_stream_frame
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("CVWorkerMain")
@@ -199,6 +201,15 @@ def main():
     logger.info("  [C] Crear nueva venta en el Backend")
     logger.info("  [Q] Salir\n")
 
+    # Iniciar servidor de streaming MJPEG local para el frontend web
+    if ENABLE_STREAM:
+        start_stream_server(host=STREAM_HOST, port=STREAM_PORT)
+
+    # Clases de YOLOv8 a ignorar explícitamente (personas, muebles, fondo de oficina/habitación)
+    CLASES_IGNORADAS = {
+        "person", "chair", "couch", "bed", "dining table", "tv", "laptop", "keyboard", "mouse", "remote", "clock"
+    }
+
     # Contadores de estado
     consecutive_no_barcode_frames = 0
     last_action_time = 0
@@ -265,43 +276,63 @@ def main():
         else:
             detecciones = last_detecciones
 
-        detecto_objeto = len(detecciones) > 0
+        # Filtrar objetos no deseados (personas, muebles, fondo)
+        candidatos = [d for d in detecciones if d["clase"].lower() not in CLASES_IGNORADAS]
+
+        # Priorizar: Si hay un celular ('cell phone'), darle prioridad máxima;
+        # si no, priorizar los objetos más cercanos al centro de la cámara
+        obj = None
+        detecto_objeto = False
+        if candidatos:
+            def prioridad_candidato(c):
+                es_celular = 1 if c["clase"].lower() == "cell phone" else 0
+                cx = c["bbox"]["x"] + c["bbox"]["w"] / 2
+                cy = c["bbox"]["y"] + c["bbox"]["h"] / 2
+                dist_centro = ((cx - 320)**2 + (cy - 240)**2)**0.5
+                return (-es_celular, dist_centro)
+
+            candidatos.sort(key=prioridad_candidato)
+            obj = candidatos[0]
+            detecto_objeto = True
+
         codigo_detectado = None
         bbox_actual = None
         clase_yolo = None
         confianza_yolo = 0.0
+        reconocimiento_visual_match = None
 
-        # Dibujar el bbox en TODOS los fotogramas (barato) para que el HUD no parpadee,
-        # aunque el reconocimiento pesado solo corra en frames de proceso.
-        if detecto_objeto:
-            obj = detecciones[0]
+        if detecto_objeto and not cooldown_activo:
             bbox_actual = obj["bbox"]
             clase_yolo = obj["clase"]
             confianza_yolo = obj["confianza"]
 
-        # El reconocimiento pesado (codigo de barras + vector ResNet18) corre SOLO en frames de proceso,
-        # sincronizado con YOLO, para no duplicar inferencia GPU en cada fotograma y evitar trabarse al mover el producto.
-        if detecto_objeto and not cooldown_activo and es_frame_de_proceso:
+            # Recorte de ROI del producto o celular
+            x, y, w, h = bbox_actual["x"], bbox_actual["y"], bbox_actual["w"], bbox_actual["h"]
+            if clase_yolo.lower() == "cell phone":
+                # Leve margen interior para enfocar la imagen en pantalla del teléfono
+                mx = int(w * 0.06)
+                my = int(h * 0.06)
+                roi = frame[max(0, y + my):max(0, y + h - my), max(0, x + mx):max(0, x + w - mx)]
+            else:
+                roi = frame[max(0, y):max(0, y + h), max(0, x):max(0, x + w)]
+
             # 4. Intentar decodificar código de barras primero
             codigo_detectado = decodificar_codigo_barras(frame, bbox=bbox_actual)
 
             # 5. Si no hay código de barras, RECONOCER VISUALMENTE POR VECTOR DE EMBEDDINGS (ResNet18 / Supabase)
-            reconocimiento_visual_match = None
-            if not codigo_detectado and bbox_actual:
-                # Recortar ROI del producto detectado
-                x, y, w, h = bbox_actual["x"], bbox_actual["y"], bbox_actual["w"], bbox_actual["h"]
-                roi = frame[max(0, y):max(0, y+h), max(0, x):max(0, x+w)]
-                if roi.size > 0:
-                    vec = vector_engine.extraer_vector(roi)
-                    match_data, sim_score = vector_engine.buscar_producto_por_vector(vec, umbral_similitud=0.78)
-                    if match_data:
-                        reconocimiento_visual_match = {
-                            "codigo": match_data["codigo"],
-                            "nombre": match_data["nombre"],
-                            "clase": match_data.get("clase", clase_yolo),
-                            "sim": sim_score,
-                            "vector": vec.tolist() if vec is not None else None
-                        }
+            if not codigo_detectado and roi.size > 0:
+                vec = vector_engine.extraer_vector(roi)
+                match_data, sim_score = vector_engine.buscar_producto_por_vector(
+                    vec, umbral_similitud=VECTOR_SIMILARITY_THRESHOLD
+                )
+                if match_data:
+                    reconocimiento_visual_match = {
+                        "codigo": match_data["codigo"],
+                        "nombre": match_data["nombre"],
+                        "clase": match_data.get("clase", clase_yolo),
+                        "sim": sim_score,
+                        "vector": vec.tolist() if vec is not None else None
+                    }
 
             if codigo_detectado:
                 # Detección Exitosa por Código de Barras
@@ -345,7 +376,7 @@ def main():
                 api_executor.submit(enviar_deteccion_api, payload)
 
             else:
-                # Regla de N Frames: Se detecta objeto no identificado
+                # Regla de N Frames: Solo si hay un objeto en la zona que no se pudo identificar
                 consecutive_no_barcode_frames += 1
                 logger.info(f"Frame {consecutive_no_barcode_frames}/{FALLBACK_FRAME_THRESHOLD} sin reconocimiento visual...")
 
@@ -374,75 +405,74 @@ def main():
                     }
                     api_executor.submit(enviar_deteccion_api, payload)
 
-                    consecutive_no_barcode_frames = 0
-
-        # Reset contador si no hay objeto en la imagen
+        # Reset contador si no hay ningún objeto candidato en la imagen
         if not detecto_objeto:
             consecutive_no_barcode_frames = 0
 
-        # --- 5. Renderizado de Interfaz Visual (HUD Overlay Táctico con Vectores) ---
+        # --- 5. Renderizado de Interfaz Visual (HUD Overlay con Zona de Escaneo y Detecciones) ---
+        # Guía visual de Zona de Escaneo Central
+        h_f, w_f = frame.shape[:2]
+        zx1, zy1 = int(w_f * 0.18), int(h_f * 0.15)
+        zx2, zy2 = int(w_f * 0.82), int(h_f * 0.85)
+        c_len = 22
+        col_g = (80, 100, 120)
+        cv2.line(frame, (zx1, zy1), (zx1 + c_len, zy1), col_g, 2)
+        cv2.line(frame, (zx1, zy1), (zx1, zy1 + c_len), col_g, 2)
+        cv2.line(frame, (zx2, zy1), (zx2 - c_len, zy1), col_g, 2)
+        cv2.line(frame, (zx2, zy1), (zx2, zy1 + c_len), col_g, 2)
+        cv2.line(frame, (zx1, zy2), (zx1 + c_len, zy2), col_g, 2)
+        cv2.line(frame, (zx1, zy2), (zx1, zy2 - c_len), col_g, 2)
+        cv2.line(frame, (zx2, zy2), (zx2 - c_len, zy2), col_g, 2)
+        cv2.line(frame, (zx2, zy2), (zx2, zy2 - c_len), col_g, 2)
+
+        # Dibujar bounding boxes y métricas sobre el frame
         if bbox_actual:
             x, y, w, h = bbox_actual["x"], bbox_actual["y"], bbox_actual["w"], bbox_actual["h"]
+            es_celular = clase_yolo.lower() == "cell phone"
+            color = (0, 255, 0) if (codigo_detectado or ('reconocimiento_visual_match' in locals() and reconocimiento_visual_match)) else ((255, 180, 0) if es_celular else (0, 165, 255))
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
             
-            # Dibujar esquinas tácticas (Corner Brackets)
-            color = (0, 255, 0) if codigo_detectado else ((255, 230, 0) if 'reconocimiento_visual_match' in locals() and reconocimiento_visual_match else (0, 165, 255))
-            l = int(min(w, h) * 0.2)
-            # Esquina superior izquierda
-            cv2.line(frame, (x, y), (x + l, y), color, 3)
-            cv2.line(frame, (x, y), (x, y + l), color, 3)
-            # Esquina superior derecha
-            cv2.line(frame, (x + w, y), (x + w - l, y), color, 3)
-            cv2.line(frame, (x + w, y), (x + w, y + l), color, 3)
-            # Esquina inferior izquierda
-            cv2.line(frame, (x, y + h), (x + l, y + h), color, 3)
-            cv2.line(frame, (x, y + h), (x, y + h - l), color, 3)
-            # Esquina inferior derecha
-            cv2.line(frame, (x + w, y + h), (x + w - l, y + h), color, 3)
-            cv2.line(frame, (x + w, y + h), (x + w, y + h - l), color, 3)
-
-            # Dibujar rejilla de puntos de extracción de características de vectores (Feature Nodes Overlay)
-            for gx in range(1, 4):
-                for gy in range(1, 4):
-                    px = x + int(w * gx / 4)
-                    py = y + int(h * gy / 4)
-                    cv2.circle(frame, (px, py), 3, (255, 255, 0), -1)
-
-            # Etiqueta de reconocimiento vectorial o código de barras
-            if codigo_detectado:
-                label = f"BARCODE: {codigo_detectado} ({clase_yolo})"
-            elif 'reconocimiento_visual_match' in locals() and reconocimiento_visual_match:
-                sim_pct = int(reconocimiento_visual_match["sim"] * 100)
-                label = f"VECTOR MATCH: {sim_pct}% | {reconocimiento_visual_match['nombre']}"
+            if es_celular:
+                label = f"📱 CELULAR {int(confianza_yolo*100)}%"
             else:
-                sim_val = int(best_sim * 100) if 'best_sim' in locals() else 0
-                label = f"ANALIZANDO VECTOR (512D ResNet18)... Sim: {sim_val}%"
+                label = f"{clase_yolo} {int(confianza_yolo*100)}%"
 
-            cv2.rectangle(frame, (x, max(0, y - 25)), (x + len(label) * 9, max(25, y)), (20, 25, 35), -1)
-            cv2.putText(frame, label, (x + 5, max(18, y - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
+            if codigo_detectado:
+                label += f" | {codigo_detectado}"
+            elif 'reconocimiento_visual_match' in locals() and reconocimiento_visual_match:
+                label += f" | {reconocimiento_visual_match['nombre']} ({int(reconocimiento_visual_match['sim']*100)}%)"
+            cv2.putText(frame, label, (x, max(20, y - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        # Barra superior de estado con info de GPU y FPS
-        cv2.rectangle(frame, (0, 0), (frame.shape[1], 35), (15, 20, 30), -1)
+        # Barra superior de estado
+        cv2.rectangle(frame, (0, 0), (frame.shape[1], 35), (20, 25, 35), -1)
         import torch
-        gpu_badge = "GPU: RTX 4050 (CUDA)" if torch.cuda.is_available() else "CPU"
-        cv2.putText(frame, f"POS CV Worker | FPS: {current_fps} | {gpu_badge}", (10, 22),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 200), 1)
-        cv2.putText(frame, f"Venta ID: {str(venta_id_actual)[:8]}...", (340, 22),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 220, 255), 1)
+        gpu_badge = "GPU: RTX 4050" if torch.cuda.is_available() else "CPU"
+        cv2.putText(frame, f"POS CV Stream | FPS: {current_fps} | {gpu_badge}", (10, 22),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1)
+        cv2.putText(frame, f"Venta: {str(venta_id_actual)[:8]}...", (380, 22),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.48, (180, 220, 255), 1)
 
         # Contador de frames de fallback
         if consecutive_no_barcode_frames > 0:
-            cv2.putText(frame, f"Sin barra: {consecutive_no_barcode_frames}/{FALLBACK_FRAME_THRESHOLD}",
+            cv2.putText(frame, f"Sin id: {consecutive_no_barcode_frames}/{FALLBACK_FRAME_THRESHOLD}",
                         (frame.shape[1] - 150, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
 
-        # Transmitir fotograma procesado al backend para el stream MJPEG web
-        enviar_frame_stream_async(frame)
+        # Transmitir frame al backend y al servidor local MJPEG
+        if 'enviar_frame_stream_async' in globals():
+            enviar_frame_stream_async(frame)
 
-        # Mostrar ventana OpenCV local (opcional: el Dashboard ya muestra el mismo stream via /cv/stream)
-        if SHOW_DEBUG_WINDOW:
+        if ENABLE_STREAM:
+            ret_enc, jpeg_buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+            if ret_enc:
+                update_stream_frame(jpeg_buf.tobytes(), fps=current_fps)
+
+        # Mostrar ventana OpenCV solo si SHOW_CV2_WINDOW o SHOW_DEBUG_WINDOW están activos
+        if SHOW_CV2_WINDOW or SHOW_DEBUG_WINDOW:
             cv2.imshow("Punto de Venta — Reconocimiento de Producto (Dev B)", frame)
-
-        # --- 6. Manejo de Entradas de Teclado ---
-        key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(20) & 0xFF
+        else:
+            time.sleep(0.015)
+            key = 255
         if key == ord('q') or key == 27:
             logger.info("Cerrando worker de visión...")
             break

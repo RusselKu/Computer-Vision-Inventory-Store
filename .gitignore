@@ -24,3 +24,5 @@ htmlcov/
 .mcp.json
 AGENTS.md
 yolov8n.pt
+*.sqlite3
+backend/data/
