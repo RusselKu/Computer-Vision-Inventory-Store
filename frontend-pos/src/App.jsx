@@ -26,8 +26,36 @@ export default function App() {
   const [alertaFallback, setAlertaFallback] = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [streamActive, setStreamActive] = useState(true);
+  const [ultimoItemDetectado, setUltimoItemDetectado] = useState(null);
+  const [streamKey, setStreamKey] = useState(Date.now());
 
   const wsRef = useRef(null);
+
+  // Monitorear estado del servidor local de streaming MJPEG
+  useEffect(() => {
+    const checkStream = async () => {
+      try {
+        const res = await fetch('http://localhost:8088/status', { method: 'GET' });
+        if (res.ok) {
+          const data = await res.json();
+          setStreamActive(data.status === 'online');
+        } else {
+          setStreamActive(false);
+        }
+      } catch {
+        setStreamActive(false);
+      }
+    };
+    checkStream();
+    const interval = setInterval(checkStream, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const reintentarStream = () => {
+    setStreamKey(Date.now());
+    setStreamActive(true);
+  };
 
   // Iniciar venta al cargar la aplicación
   useEffect(() => {
@@ -56,10 +84,12 @@ export default function App() {
           // Reproducir beep de escaneo exitoso
           reproducirSonido('beep');
           recargarVenta(venta.id);
+          const nom = payload.producto?.nombre || 'Producto agregado';
+          setUltimoItemDetectado(nom);
         } else if (payload.type === 'ALERTA_CV_FALLBACK') {
           // Reproducir aviso de alerta
           reproducirSonido('alerta');
-          setAlertaFallback(payload.mensaje || 'Producto no reconocido tras 5 frames.');
+          setAlertaFallback(payload.mensaje || 'Producto no reconocido tras 25 frames.');
         }
       } catch (err) {
         console.error('Error procesando evento WebSocket:', err);
@@ -362,6 +392,45 @@ export default function App() {
 
         {/* Right Column: Totals & Checkout */}
         <section className="checkout-panel">
+          {/* Visor de Cámara e IA en Vivo */}
+          <div className="pos-camera-card">
+            <div className="pos-camera-header">
+              <div className="pos-camera-title">
+                <Camera size={18} style={{ color: '#10b981' }} />
+                <span>Cámara de Visión IA</span>
+              </div>
+              <div className={`camera-live-badge ${streamActive ? 'live' : 'idle'}`}>
+                <span className="dot-pulse"></span>
+                <span>{streamActive ? 'EN VIVO' : 'EN ESPERA'}</span>
+              </div>
+            </div>
+
+            <div className="pos-camera-viewport">
+              {streamActive ? (
+                <img
+                  key={streamKey}
+                  src="http://localhost:8088/video_feed"
+                  alt="Cámara POS en vivo"
+                  className="pos-camera-stream"
+                  onError={() => setStreamActive(false)}
+                />
+              ) : (
+                <div className="pos-camera-placeholder" onClick={reintentarStream}>
+                  <Camera size={36} style={{ color: '#64748b', marginBottom: 8 }} />
+                  <p style={{ fontWeight: 600, color: '#cbd5e1' }}>Cámara desconectada o en espera</p>
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Clic aquí para reconectar (puerto 8088)</p>
+                </div>
+              )}
+            </div>
+
+            <div className="pos-camera-footer">
+              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Objetos: Productos o Celular</span>
+              {ultimoItemDetectado && (
+                <span className="badge-detected">Último: {ultimoItemDetectado}</span>
+              )}
+            </div>
+          </div>
+
           <div className="totals-breakdown">
             <h2 className="totals-title">Resumen de Cuenta</h2>
 

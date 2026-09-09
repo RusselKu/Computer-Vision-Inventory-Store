@@ -26,9 +26,38 @@ export default function PosView() {
   const [alertaFallback, setAlertaFallback] = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [streamActive, setStreamActive] = useState(true);
+  const [ultimoItemDetectado, setUltimoItemDetectado] = useState(null);
+  const [streamKey, setStreamKey] = useState(Date.now());
+
   const wsRef = useRef(null);
   const cierrePendiente = ['pending', 'processing'].includes(venta?.sync_status);
   const ventaBloqueada = cierrePendiente || venta?.estado === 'completada';
+
+  // Monitorear estado del servidor local de streaming MJPEG
+  useEffect(() => {
+    const checkStream = async () => {
+      try {
+        const res = await fetch('http://localhost:8088/status', { method: 'GET' });
+        if (res.ok) {
+          const data = await res.json();
+          setStreamActive(data.status === 'online');
+        } else {
+          setStreamActive(false);
+        }
+      } catch {
+        setStreamActive(false);
+      }
+    };
+    checkStream();
+    const interval = setInterval(checkStream, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const reintentarStream = () => {
+    setStreamKey(Date.now());
+    setStreamActive(true);
+  };
 
   // Iniciar venta al cargar la aplicación
   useEffect(() => {
@@ -56,6 +85,8 @@ export default function PosView() {
         if (payload.type === 'ITEM_AGREGADO_CV') {
           reproducirSonido('beep');
           recargarVenta(venta.id).then((updated) => {
+            const nom = payload.producto?.nombre || 'Producto agregado';
+            setUltimoItemDetectado(nom);
             if (updated && import.meta.env.VITE_MEASURE_LATENCY === 'true' && payload.captured_at_ms) {
               requestAnimationFrame(() => requestAnimationFrame(() => {
                 const sample = {
@@ -70,7 +101,8 @@ export default function PosView() {
           });
         } else if (payload.type === 'ALERTA_CV_FALLBACK') {
           reproducirSonido('alerta');
-          setAlertaFallback(payload);
+          setAlertaFallback(payload.data || payload);
+
         }
       } catch (e) {
         console.error('Error parseando mensaje WebSocket:', e);
@@ -404,8 +436,46 @@ export default function PosView() {
           </div>
         </section>
 
-        {/* PANEL DERECHO: BUSQUEDA MANUAL Y RESUMEN DE COBRO */}
+        {/* PANEL DERECHO: CÁMARA EN VIVO, BUSQUEDA MANUAL Y RESUMEN DE COBRO */}
         <section className="pos-checkout-section">
+          {/* VISOR EN VIVO DE CÁMARA E IA */}
+          <div className="pos-card pos-camera-card">
+            <div className="pos-camera-header">
+              <div className="pos-camera-title">
+                <Camera className="w-4 h-4 text-emerald-400" />
+                <span>Cámara de Visión IA</span>
+              </div>
+              <div className={`camera-live-badge ${streamActive ? 'live' : 'idle'}`}>
+                <span className="dot-pulse"></span>
+                <span>{streamActive ? 'EN VIVO' : 'EN ESPERA'}</span>
+              </div>
+            </div>
+
+            <div className="pos-camera-viewport">
+              {streamActive ? (
+                <img
+                  key={streamKey}
+                  src="http://localhost:8088/video_feed"
+                  alt="Cámara POS en vivo"
+                  className="pos-camera-stream"
+                  onError={() => setStreamActive(false)}
+                />
+              ) : (
+                <div className="pos-camera-placeholder" onClick={reintentarStream}>
+                  <Camera className="w-10 h-10 text-slate-500 mb-2" />
+                  <p className="font-semibold text-slate-300">Cámara desconectada o en espera</p>
+                  <p className="text-xs text-slate-400">Clic aquí para reconectar (puerto 8088)</p>
+                </div>
+              )}
+            </div>
+
+            <div className="pos-camera-footer">
+              <span className="text-xs text-slate-400">Objetos: Productos o Pantalla Celular</span>
+              {ultimoItemDetectado && (
+                <span className="badge-detected">Último: {ultimoItemDetectado}</span>
+              )}
+            </div>
+          </div>
 
           {/* BUSQUEDA MANUAL POR CODIGO */}
           <div className="pos-card pos-manual-card">

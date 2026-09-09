@@ -25,6 +25,12 @@ COOL_DOWN_SECONDS = float(os.getenv("COOL_DOWN_SECONDS", "2.0"))
 
 # Rendimiento: procesar 1 de cada N frames con YOLO + ResNet18 (ambos sincronizados)
 PROCESS_EVERY_N_FRAMES = int(os.getenv("PROCESS_EVERY_N_FRAMES", "3"))
-# Ventana de depuración local (cv2.imshow). Desactivar en producción: solo se necesita el stream del Dashboard.
-SHOW_DEBUG_WINDOW = os.getenv("SHOW_DEBUG_WINDOW", "true").lower() in ("true", "1", "yes")
+
+# Configuración de Streaming y Visualización Web
+SHOW_CV2_WINDOW = os.getenv("SHOW_CV2_WINDOW", os.getenv("SHOW_DEBUG_WINDOW", "false")).lower() in ("true", "1", "yes")
+SHOW_DEBUG_WINDOW = SHOW_CV2_WINDOW
+ENABLE_STREAM = os.getenv("ENABLE_STREAM", "true").lower() in ("true", "1", "yes")
+STREAM_PORT = int(os.getenv("STREAM_PORT", "8088"))
+STREAM_HOST = os.getenv("STREAM_HOST", "0.0.0.0")
+VECTOR_SIMILARITY_THRESHOLD = float(os.getenv("VECTOR_SIMILARITY_THRESHOLD", "0.70"))
 
