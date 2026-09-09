@@ -26,8 +26,9 @@ export default function PosView() {
   const [alertaFallback, setAlertaFallback] = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
   const [cargando, setCargando] = useState(false);
-
   const wsRef = useRef(null);
+  const cierrePendiente = ['pending', 'processing'].includes(venta?.sync_status);
+  const ventaBloqueada = cierrePendiente || venta?.estado === 'completada';
 
   // Iniciar venta al cargar la aplicación
   useEffect(() => {
@@ -54,10 +55,22 @@ export default function PosView() {
 
         if (payload.type === 'ITEM_AGREGADO_CV') {
           reproducirSonido('beep');
-          recargarVenta(venta.id);
+          recargarVenta(venta.id).then((updated) => {
+            if (updated && import.meta.env.VITE_MEASURE_LATENCY === 'true' && payload.captured_at_ms) {
+              requestAnimationFrame(() => requestAnimationFrame(() => {
+                const sample = {
+                  source: payload.measurement_source,
+                  frame_to_cart_ms: Date.now() - payload.captured_at_ms,
+                  at: new Date().toISOString(),
+                };
+                window.POS_LATENCY_SAMPLES = [...(window.POS_LATENCY_SAMPLES || []).slice(-999), sample];
+                console.info('[Dev E latency]', sample);
+              }));
+            }
+          });
         } else if (payload.type === 'ALERTA_CV_FALLBACK') {
           reproducirSonido('alerta');
-          setAlertaFallback(payload.data);
+          setAlertaFallback(payload);
         }
       } catch (e) {
         console.error('Error parseando mensaje WebSocket:', e);
@@ -77,6 +90,19 @@ export default function PosView() {
       ws.close();
     };
   }, [venta?.id]);
+
+  // Polling de respaldo para mantener el carrito siempre actualizado en tiempo real
+  useEffect(() => {
+    if (!venta?.id) return;
+
+    // Si hay WebSocket activo, reducir polling a 5s para evitar renders innecesarios
+    const pollInterval = wsConnected ? 5000 : 2500;
+    const intervalId = setInterval(() => {
+      recargarVenta(venta.id);
+    }, pollInterval);
+
+    return () => clearInterval(intervalId);
+  }, [venta?.id, wsConnected]);
 
   const reproducirSonido = (tipo) => {
     try {
@@ -106,6 +132,18 @@ export default function PosView() {
   const iniciarNuevaVenta = async () => {
     setCargando(true);
     try {
+      // 1. Intentar sincronizar con una venta abierta existente
+      const resAbierta = await fetch(`${API_BASE}/ventas?estado=abierta&limit=1`);
+      if (resAbierta.ok) {
+        const abiertas = await resAbierta.json();
+        if (abiertas && abiertas.length > 0) {
+          setVenta(abiertas[0]);
+          setCargando(false);
+          return;
+        }
+      }
+
+      // 2. Si no hay venta abierta, crear nueva
       const res = await fetch(`${API_BASE}/ventas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -130,6 +168,7 @@ export default function PosView() {
       if (res.ok) {
         const data = await res.json();
         setVenta(data);
+        return data;
       }
     } catch (err) {
       console.error('Error al recargar venta:', err);
@@ -138,6 +177,7 @@ export default function PosView() {
 
   const agregarProductoManual = async (e) => {
     e.preventDefault();
+    if (ventaBloqueada || cargando) return;
     if (!codigoManual.trim() || !venta?.id) return;
 
     setCargando(true);
@@ -146,7 +186,7 @@ export default function PosView() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          codigo: codigoManual,
+          codigo_barras: codigoManual,
           cantidad: 1
         })
       });
@@ -168,6 +208,7 @@ export default function PosView() {
   };
 
   const cambiarCantidad = async (itemId, nuevaCantidad) => {
+    if (ventaBloqueada || cargando) return;
     if (nuevaCantidad <= 0) {
       eliminarItem(itemId);
       return;
@@ -188,6 +229,7 @@ export default function PosView() {
   };
 
   const eliminarItem = async (itemId) => {
+    if (ventaBloqueada || cargando) return;
     try {
       const res = await fetch(`${API_BASE}/ventas/${venta.id}/items/${itemId}`, {
         method: 'DELETE'
@@ -201,11 +243,12 @@ export default function PosView() {
   };
 
   const completarCobro = async () => {
+    if (ventaBloqueada || cargando) return;
     if (!venta?.id || !venta?.items || venta.items.length === 0) return;
 
     setCargando(true);
     try {
-      const res = await fetch(`${API_BASE}/ventas/${venta.id}/checkout`, {
+      const res = await fetch(`${API_BASE}/ventas/${venta.id}/cerrar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ metodo_pago: metodoPago })
@@ -213,7 +256,12 @@ export default function PosView() {
 
       if (res.ok) {
         const data = await res.json();
-        setTicketModal(data);
+        if (res.status === 202 || !data.success) {
+          setVenta((prev) => ({ ...prev, sync_status: 'pending' }));
+        } else {
+          setTicketModal({ venta: { ...venta, ...data } });
+          recargarVenta(venta.id);
+        }
       } else {
         const errData = await res.json();
         alert(`Error en checkout: ${errData.detail || 'Falló la transacción'}`);
@@ -255,12 +303,16 @@ export default function PosView() {
           <button 
             className="btn-secundario"
             onClick={iniciarNuevaVenta}
-            disabled={cargando}
+            disabled={cargando || cierrePendiente}
           >
             Nueva Venta
           </button>
         </div>
       </header>
+
+      {cierrePendiente && <p role="status">Cierre guardado en este equipo. Esperando confirmación de Supabase; no repitas el cobro.</p>}
+      {venta?.sync_status === 'rejected' && <p role="alert">El cierre no se confirmó. Revisa stock y el estado en /api/v1/resiliencia antes de reintentarlo.</p>}
+      {venta?.sync_status === 'synced' && !ticketModal && <p role="status">Venta confirmada. Ya puedes iniciar la siguiente venta.</p>}
 
       {/* CONTENIDO PRINCIPAL */}
       <main className="pos-main">
@@ -316,6 +368,7 @@ export default function PosView() {
                         <div className="qty-controls">
                           <button 
                             className="btn-qty" 
+                            disabled={cargando || ventaBloqueada}
                             onClick={() => cambiarCantidad(item.id, item.cantidad - 1)}
                           >
                             <Minus className="w-3 h-3" />
@@ -323,6 +376,7 @@ export default function PosView() {
                           <span className="qty-value">{item.cantidad}</span>
                           <button 
                             className="btn-qty" 
+                            disabled={cargando || ventaBloqueada}
                             onClick={() => cambiarCantidad(item.id, item.cantidad + 1)}
                           >
                             <Plus className="w-3 h-3" />
@@ -335,6 +389,7 @@ export default function PosView() {
                       <td>
                         <button 
                           className="btn-delete"
+                          disabled={cargando || ventaBloqueada}
                           onClick={() => eliminarItem(item.id)}
                           title="Eliminar producto"
                         >
@@ -351,6 +406,7 @@ export default function PosView() {
 
         {/* PANEL DERECHO: BUSQUEDA MANUAL Y RESUMEN DE COBRO */}
         <section className="pos-checkout-section">
+
           {/* BUSQUEDA MANUAL POR CODIGO */}
           <div className="pos-card pos-manual-card">
             <h3><Barcode className="w-5 h-5 inline mr-1 text-cyan-400" /> Búsqueda Manual</h3>
@@ -363,7 +419,7 @@ export default function PosView() {
                   onChange={(e) => setCodigoManual(e.target.value)}
                   className="pos-input"
                 />
-                <button type="submit" className="btn-primario" disabled={cargando}>
+                <button type="submit" className="btn-primario" disabled={cargando || ventaBloqueada}>
                   <Search className="w-4 h-4" />
                   <span>Agregar</span>
                 </button>
@@ -417,7 +473,7 @@ export default function PosView() {
             {/* BOTON DE COBRAR */}
             <button 
               className="btn-checkout"
-              disabled={!venta?.items || venta.items.length === 0 || cargando}
+              disabled={!venta?.items || venta.items.length === 0 || cargando || ventaBloqueada}
               onClick={completarCobro}
             >
               <CheckCircle2 className="w-6 h-6 mr-2" />

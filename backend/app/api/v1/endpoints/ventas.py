@@ -1,6 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from app.models.venta import (
     ItemVentaCreate,
     ItemVentaUpdate,
@@ -52,13 +52,14 @@ def eliminar_item(venta_id: UUID, item_id: UUID):
 
 
 @router.patch("/{venta_id}/items/{item_id}", response_model=VentaResponse, summary="Actualizar cantidad de un item")
+@router.put("/{venta_id}/items/{item_id}", response_model=VentaResponse, summary="Actualizar cantidad de un item (PUT alias)")
 def actualizar_cantidad_item(venta_id: UUID, item_id: UUID, payload: ItemVentaUpdate):
     """Modifica la cantidad de unidades de un producto en el carrito."""
     return VentasService.actualizar_cantidad_item(venta_id, item_id, payload.cantidad)
 
 
 @router.post("/{venta_id}/cerrar", response_model=VentaCerradaResponse, summary="Cerrar y cobrar la venta (cerrar_venta)")
-def cerrar_venta(venta_id: UUID, payload: VentaCerrarRequest = VentaCerrarRequest()):
+def cerrar_venta(venta_id: UUID, response: Response, payload: VentaCerrarRequest = VentaCerrarRequest()):
     """
     Finaliza la transacción de forma atómica:
     1. Bloquea las filas en Postgres y verifica existencias de cada producto.
@@ -66,7 +67,10 @@ def cerrar_venta(venta_id: UUID, payload: VentaCerrarRequest = VentaCerrarReques
     3. Cambia el estado a 'completada'.
     4. Emite el evento en Supabase Realtime para Dev D (Dashboard).
     """
-    return VentasService.cerrar_venta(venta_id, payload.metodo_pago)
+    result = VentasService.cerrar_venta(venta_id, payload.metodo_pago)
+    if not result['success']:
+        response.status_code = status.HTTP_202_ACCEPTED
+    return result
 
 
 @router.post("/{venta_id}/cancelar", response_model=VentaResponse, summary="Cancelar venta abierta")

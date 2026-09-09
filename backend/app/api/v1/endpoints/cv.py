@@ -1,4 +1,6 @@
-from fastapi import APIRouter, status
+import asyncio
+from fastapi import APIRouter, Request, Response, status
+from fastapi.responses import StreamingResponse
 from app.models.cv import CVDetectionEvent, CVDetectionResult
 from app.models.venta import ItemVentaCreate, MetodoDeteccion
 from app.services.productos_service import ProductosService
@@ -6,6 +8,36 @@ from app.services.ventas_service import VentasService
 from app.api.v1.endpoints.ws import broadcast_pos_event
 
 router = APIRouter(prefix="/cv", tags=["Visión por Computadora (Dev B)"])
+
+_latest_frame_jpeg: bytes = None
+
+
+@router.post("/stream-frame", status_code=status.HTTP_204_NO_CONTENT, summary="Recibir fotograma JPEG procesado del Worker CV")
+async def recibir_fotograma_cv(request: Request):
+    global _latest_frame_jpeg
+    _latest_frame_jpeg = await request.body()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/stream", summary="Transmisión en vivo MJPEG de la cámara con IA")
+async def transmitir_video_cv():
+    async def generar_stream():
+        while True:
+            if _latest_frame_jpeg is not None:
+                yield (
+                    b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + _latest_frame_jpeg + b'\r\n'
+                )
+            else:
+                # Si aún no hay frames, enviar un frame transparente o pequeño delay
+                await asyncio.sleep(0.1)
+                continue
+            await asyncio.sleep(0.04)  # ~25 FPS
+
+    return StreamingResponse(
+        generar_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
 
 
 @router.post("/deteccion", response_model=CVDetectionResult, summary="Recepción de evento de visión por computadora")
@@ -21,6 +53,8 @@ async def recibir_deteccion_cv(evento: CVDetectionEvent):
         mensaje_alerta = evento.mensaje_error or "Detección fallida o no concluyente. Requiere captura manual."
         await broadcast_pos_event(str(evento.venta_id), {
             "type": "ALERTA_CV_FALLBACK",
+            "captured_at_ms": evento.captured_at_ms,
+            "measurement_source": evento.measurement_source,
             "mensaje": mensaje_alerta,
             "confianza": evento.confianza,
             "bounding_box": evento.bounding_box.model_dump() if evento.bounding_box else None
@@ -78,6 +112,8 @@ async def recibir_deteccion_cv(evento: CVDetectionEvent):
         # Notificar en tiempo real al POS por WebSocket
         await broadcast_pos_event(str(evento.venta_id), {
             "type": "ITEM_AGREGADO_CV",
+            "captured_at_ms": evento.captured_at_ms,
+            "measurement_source": evento.measurement_source,
             "producto": prod_agregado,
             "metodo": metodo.value,
             "confianza": evento.confianza,

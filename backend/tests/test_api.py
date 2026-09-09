@@ -1,4 +1,5 @@
 import pytest
+pytestmark = pytest.mark.integration
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -94,12 +95,13 @@ def test_flujo_completo_pos_y_cierre():
     assert resultado_cierre["estado"] == "completada"
     assert resultado_cierre["total"] == 36.00
 
-    # 6. Intentar cerrar nuevamente (debe fallar porque ya no está 'abierta')
+    # 6. Repetir el cierre devuelve la misma confirmación sin descontar otra vez.
     res_cerrar_duplicado = client.post(
         f"/api/v1/ventas/{venta_id}/cerrar",
         json={"metodo_pago": "efectivo"}
     )
-    assert res_cerrar_duplicado.status_code == 400
+    assert res_cerrar_duplicado.status_code == 200
+    assert res_cerrar_duplicado.json()['total'] == resultado_cierre['total']
 
 
 def test_evento_cv_integracion():

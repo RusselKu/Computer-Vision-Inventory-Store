@@ -1,5 +1,7 @@
 # Variables de entorno y secretos
 .env
+.env.local
+.env.*.local
 mcp_config.json
 
 # Python y entornos virtuales

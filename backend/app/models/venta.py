@@ -66,6 +66,7 @@ class VentaCerrarRequest(BaseModel):
 
 
 class VentaResponse(BaseModel):
+    sync_status: str = "online"
     id: UUID
     folio: str
     estado: EstadoVenta
@@ -81,6 +82,7 @@ class VentaResponse(BaseModel):
 
 
 class VentaCerradaResponse(BaseModel):
+    sync_status: str = "synced"
     success: bool
     venta_id: UUID
     folio: str

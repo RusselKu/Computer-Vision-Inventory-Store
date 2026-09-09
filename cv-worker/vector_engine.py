@@ -16,6 +16,16 @@ except ImportError:
 
 logger = logging.getLogger("VectorEngine")
 
+# Cargar cliente Supabase opcional
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "backend"))
+try:
+    from app.core.supabase import get_supabase_client
+    supabase_client = get_supabase_client()
+    logger.info("✓ Cliente de Supabase conectado en VectorEngine (pgvector disponible).")
+except Exception as e:
+    supabase_client = None
+    logger.warning(f"Supabase no disponible en VectorEngine ({e}). Se usará catálogo vectorial local.")
+
 
 class VectorEngine:
     def __init__(self):
@@ -123,6 +133,7 @@ class VectorEngine:
             "CocaColaSet": {"codigo": "7501055312107", "nombre": "Coca-Cola Original 600ml", "clase": "coca_cola"},
             "SabritasPapas": {"codigo": "7501000111203", "nombre": "Sabritas Sal 45g", "clase": "sabritas"},
             "RuflesQueso": {"codigo": "7501000122209", "nombre": "Ruffles Queso 50g", "clase": "ruffles"},
+            "BoteAgua": {"codigo": "7501020512110", "nombre": "Agua e-pura Purificada 1L", "clase": "agua"},
             "GalletasChokis": {"codigo": "7501011115481", "nombre": "Galletas Chokis 76g", "clase": "chokis"},
             "BoteAgua": {"codigo": "7501020512110", "nombre": "Agua e·pura Purificada 1L", "clase": "agua"},
         }

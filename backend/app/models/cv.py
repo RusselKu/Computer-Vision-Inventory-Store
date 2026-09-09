@@ -11,6 +11,8 @@ class BoundingBox(BaseModel):
 
 
 class CVDetectionEvent(BaseModel):
+    captured_at_ms: Optional[float] = Field(None, ge=0, description="Dev E: reloj del host al obtener el frame, en ms Unix")
+    measurement_source: Optional[str] = None
     venta_id: UUID = Field(..., description="ID de la venta activa en el POS")
     codigo_barras: Optional[str] = Field(None, description="Código de barras decodificado por pyzbar/QR")
     clase_yolo: Optional[str] = Field(None, description="Etiqueta o clase predicha por YOLOv8 (ej. coca_cola)")
