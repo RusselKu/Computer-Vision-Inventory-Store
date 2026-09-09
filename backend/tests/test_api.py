@@ -139,3 +139,58 @@ def test_evento_cv_integracion():
     assert res_fallback.status_code == 200
     data_fallback = res_fallback.json()
     assert data_fallback["status"] == "requiere_manual"
+
+
+def test_busqueda_vectorial_pgvector_api():
+    import sys, os, cv2
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "cv-worker")))
+    from vector_engine import VectorEngine
+
+    img = cv2.imread("SetImagenesBuenas/CocaColaSet/Cocacolanormal.jpg")
+    assert img is not None
+    engine = VectorEngine()
+    vec = engine.extraer_vector(img).tolist()
+
+    response = client.post("/api/v1/productos/buscar-vector", json={
+        "vector": vec,
+        "umbral": 0.70,
+        "limite": 2
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 1
+    assert "Coca-Cola" in data[0]["nombre"]
+    assert data[0]["similitud"] >= 0.75
+
+
+def test_evento_cv_deteccion_por_vector():
+    import sys, os, cv2
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "cv-worker")))
+    from vector_engine import VectorEngine
+
+    # 1. Iniciar venta
+    res_crear = client.post("/api/v1/ventas")
+    venta_id = res_crear.json()["id"]
+
+    # 2. Extraer vector de Sabritas
+    img = cv2.imread("SetImagenesBuenas/SabritasPapas/Papasnormal.png")
+    assert img is not None
+    engine = VectorEngine()
+    vec = engine.extraer_vector(img).tolist()
+
+    # 3. Enviar evento CV sin código de barras pero con vector
+    res_cv = client.post(
+        "/api/v1/cv/deteccion",
+        json={
+            "venta_id": venta_id,
+            "vector": vec,
+            "clase_yolo": "sabritas",
+            "confianza": 0.90,
+            "es_fallback": False
+        }
+    )
+    assert res_cv.status_code == 200
+    data = res_cv.json()
+    assert data["status"] == "agregado"
+    assert "Sabritas" in data["producto"]["nombre"]
+

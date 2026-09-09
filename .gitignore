@@ -20,18 +20,7 @@ htmlcov/
 *.log
 .vscode/
 .idea/
-
-# MCP config local (cada dev autoriza el suyo via /mcp)
+.agents
 .mcp.json
-
-# Pesos de modelos (se regeneran solos al correr ultralytics/torch la primera vez)
-*.pt
-
-# Archivos de prueba / sesion
-scratch/
-test_cam*.jpg
-ciel.json
-data/
-node_modules/
-dist/
-reports/
+AGENTS.md
+yolov8n.pt
