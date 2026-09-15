@@ -1,0 +1,100 @@
+.filtro-periodo {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 1.5rem;
+}
+
+.filtro-periodo-botones {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filtro-periodo-botones button {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  color: var(--text-dim);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.filtro-periodo-botones button:hover {
+  border-color: var(--blue);
+  color: var(--text);
+}
+
+.filtro-periodo-botones button.activo {
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  color: white;
+  border-color: transparent;
+}
+
+.filtro-periodo-personalizado {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filtro-periodo-personalizado input[type='date'] {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  color: var(--text, #e5e7eb);
+  color-scheme: dark;
+}
+
+.filtro-periodo-personalizado input[type='date']:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.filtro-periodo-separador {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.filtro-periodo-aplicar {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  color: var(--text-dim);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.filtro-periodo-aplicar:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--text);
+}
+
+.filtro-periodo-aplicar.activo {
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  color: white;
+  border-color: transparent;
+}
+
+.filtro-periodo-aplicar:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media print {
+  .filtro-periodo {
+    display: none;
+  }
+}
