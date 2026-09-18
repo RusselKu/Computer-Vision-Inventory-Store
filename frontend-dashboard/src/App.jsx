@@ -3,9 +3,11 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
 } from 'recharts';
-import { ShoppingCart, BarChart3 } from 'lucide-react';
+import { ShoppingCart, BarChart3, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import PosView from './PosView';
+import InformeEjecutivo from './InformeEjecutivo';
+import FiltroPeriodo from './FiltroPeriodo';
 import './App.css';
 
 const API_URL = 'http://localhost:8000/api/v1';
@@ -17,8 +19,11 @@ function App() {
   const [ventas, setVentas] = useState([]);
   const [ultimoCambio, setUltimoCambio] = useState(null);
   const [productosInfo, setProductosInfo] = useState({});
-  const [rango, setRango] = useState('hoy');
+  const [rango, setRango] = useState('hoy'); // 'hoy' | 'semana' | 'mes' | 'todo' | 'personalizado'
+  const [fechaInicio, setFechaInicio] = useState(''); // 'YYYY-MM-DD', solo para rango 'personalizado'
+  const [fechaFin, setFechaFin] = useState(''); // 'YYYY-MM-DD', solo para rango 'personalizado'
   const [itemsPorVenta, setItemsPorVenta] = useState({}); // { [ventaId]: items[] }
+  const [ventaExpandidaId, setVentaExpandidaId] = useState(null); // folio del ticket abierto en el desglose
 
   const timeoutRef = useRef(null);
 
@@ -165,15 +170,27 @@ function App() {
     if (!v.created_at) return true;
     const fechaVenta = new Date(v.created_at);
     const ahora = new Date();
+
     if (rango === 'hoy') {
       return fechaVenta.toDateString() === ahora.toDateString();
     }
-    if (rango === '7dias') {
-      const hace7dias = new Date();
-      hace7dias.setDate(ahora.getDate() - 7);
-      return fechaVenta >= hace7dias;
+    if (rango === 'semana') {
+      const haceUnaSemana = new Date();
+      haceUnaSemana.setDate(ahora.getDate() - 7);
+      return fechaVenta >= haceUnaSemana;
     }
-    return true;
+    if (rango === 'mes') {
+      const haceUnMes = new Date();
+      haceUnMes.setDate(ahora.getDate() - 30);
+      return fechaVenta >= haceUnMes;
+    }
+    if (rango === 'personalizado') {
+      if (!fechaInicio || !fechaFin) return true; // aún no se aplicó un rango válido
+      const inicio = new Date(`${fechaInicio}T00:00:00`);
+      const fin = new Date(`${fechaFin}T23:59:59.999`);
+      return fechaVenta >= inicio && fechaVenta <= fin;
+    }
+    return true; // 'todo'
   });
 
   const totalDelDia = ventasFiltradas.reduce((acc, v) => acc + Number(v.total || 0), 0);
@@ -243,6 +260,14 @@ function App() {
             <BarChart3 className="w-4 h-4" />
             <span>Panel de Métricas (Gerente)</span>
           </button>
+
+          <button 
+            className={`nav-tab-btn ${activeTab === 'informe' ? 'active' : ''}`}
+            onClick={() => setActiveTab('informe')}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Informe Ejecutivo (Dueño)</span>
+          </button>
         </nav>
 
         <div className="navbar-status-badge">
@@ -254,6 +279,20 @@ function App() {
       {/* CONTENIDO SEGÚN PESTAÑA ACTIVA */}
       {activeTab === 'pos' ? (
         <PosView />
+      ) : activeTab === 'informe' ? (
+        <InformeEjecutivo
+          rango={rango}
+          setRango={setRango}
+          fechaInicio={fechaInicio}
+          fechaFin={fechaFin}
+          setFechaInicio={setFechaInicio}
+          setFechaFin={setFechaFin}
+          ventasFiltradas={ventasFiltradas}
+          ventasTodas={ventas}
+          itemsPorVenta={itemsPorVenta}
+          productosInfo={productosInfo}
+          inventarioCompleto={inventarioCompleto}
+        />
       ) : (
         <div className="board">
           <div className="board-header">
@@ -285,11 +324,14 @@ function App() {
             </div>
           )}
 
-          <div className="filtro-rango">
-            <button className={rango === 'hoy' ? 'activo' : ''} onClick={() => setRango('hoy')}>Hoy</button>
-            <button className={rango === '7dias' ? 'activo' : ''} onClick={() => setRango('7dias')}>Últimos 7 días</button>
-            <button className={rango === 'todo' ? 'activo' : ''} onClick={() => setRango('todo')}>Todo</button>
-          </div>
+          <FiltroPeriodo
+            rango={rango}
+            setRango={setRango}
+            fechaInicio={fechaInicio}
+            fechaFin={fechaFin}
+            setFechaInicio={setFechaInicio}
+            setFechaFin={setFechaFin}
+          />
 
           <div className="stats">
             <div className="stat-card stat-card-spark">
@@ -441,19 +483,68 @@ function App() {
               )}
             </div>
 
-            <div className="panel-card">
-              <h2>Ventas completadas</h2>
+            <div className="panel-card panel-card-tickets">
+              <h2>Ventas completadas — desglose por ticket</h2>
               {ventasFiltradas.length === 0 ? (
                 <p className="panel-empty">Sin ventas en este rango.</p>
               ) : (
-                ventasFiltradas.map((venta) => (
-                  <div className="row-venta" key={venta.id}>
-                    <div className="venta-avatar">🧾</div>
-                    <span className="row-name">{venta.folio}</span>
-                    <span className="status-pill">Completada</span>
-                    <span className="sale-total">${venta.total}</span>
-                  </div>
-                ))
+                ventasFiltradas.map((venta) => {
+                  const items = itemsPorVenta[venta.id] || [];
+                  const expandida = ventaExpandidaId === venta.id;
+                  return (
+                    <div className="ticket-block" key={venta.id}>
+                      <button
+                        type="button"
+                        className="row-venta row-venta-toggle"
+                        onClick={() => setVentaExpandidaId(expandida ? null : venta.id)}
+                        aria-expanded={expandida}
+                      >
+                        <div className="venta-avatar">🧾</div>
+                        <span className="row-name">{venta.folio}</span>
+                        <span className="status-pill">Completada</span>
+                        {items.length > 0 && (
+                          <span className="ticket-items-count">{items.length} producto{items.length === 1 ? '' : 's'}</span>
+                        )}
+                        <span className="sale-total">${Number(venta.total).toFixed(2)}</span>
+                        {expandida ? <ChevronUp size={16} className="ticket-chevron" /> : <ChevronDown size={16} className="ticket-chevron" />}
+                      </button>
+
+                      {expandida && (
+                        <div className="ticket-breakdown">
+                          {items.length === 0 ? (
+                            <p className="panel-empty">Cargando detalle del ticket…</p>
+                          ) : (
+                            <>
+                              <div className="ticket-breakdown-header">
+                                <span>Producto</span>
+                                <span>Cant.</span>
+                                <span>P. unitario</span>
+                                <span>Subtotal</span>
+                              </div>
+                              {items.map((item) => {
+                                const nombre = item.producto?.nombre
+                                  ?? productosInfo[item.producto_id]?.nombre
+                                  ?? `Producto ${item.producto_id?.slice(0, 8) ?? ''}`;
+                                return (
+                                  <div className="ticket-breakdown-row" key={item.id}>
+                                    <span className="ticket-item-nombre">{nombre}</span>
+                                    <span className="ticket-item-cantidad">{item.cantidad}</span>
+                                    <span className="ticket-item-precio">${Number(item.precio_unitario).toFixed(2)}</span>
+                                    <span className="ticket-item-subtotal">${Number(item.subtotal).toFixed(2)}</span>
+                                  </div>
+                                );
+                              })}
+                              <div className="ticket-breakdown-footer">
+                                <span>Total del ticket</span>
+                                <span className="ticket-item-subtotal">${Number(venta.total).toFixed(2)}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
