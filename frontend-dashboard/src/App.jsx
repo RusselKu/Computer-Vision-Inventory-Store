@@ -36,31 +36,87 @@ function App() {
   async function cargarInventarioBajoStock() {
     try {
       const res = await fetch(`${API_URL}/inventario?solo_bajo_stock=true`);
+      if (!res.ok) throw new Error('Backend API error');
       const data = await res.json();
       setInventario(data);
       data.forEach((item) => resolverProducto(item.producto_id));
     } catch (err) {
-      console.error('Error cargando inventario bajo stock:', err);
+      console.warn('Backend local no disponible. Consultando Supabase directamente (inventario bajo stock)...', err);
+      try {
+        const { data, error } = await supabase
+          .from('inventario')
+          .select('*, productos(*)');
+        if (data && !error) {
+          const bajoStock = data.filter((item) => item.stock_actual <= (item.stock_minimo ?? 5));
+          setInventario(bajoStock);
+          bajoStock.forEach((item) => {
+            if (item.productos) {
+              setProductosInfo((prev) => ({ ...prev, [item.producto_id]: item.productos }));
+            }
+          });
+        }
+      } catch (sbErr) {
+        console.error('Error al consultar Supabase:', sbErr);
+      }
     }
   }
 
   async function cargarInventarioCompleto() {
     try {
       const res = await fetch(`${API_URL}/inventario?limit=200`);
+      if (!res.ok) throw new Error('Backend API error');
       const data = await res.json();
       setInventarioCompleto(data);
     } catch (err) {
-      console.error('Error cargando inventario completo:', err);
+      console.warn('Backend local no disponible. Consultando Supabase directamente (inventario completo)...', err);
+      try {
+        const { data, error } = await supabase.from('inventario').select('*, productos(*)').limit(200);
+        if (data && !error) {
+          setInventarioCompleto(data);
+          data.forEach((item) => {
+            if (item.productos) {
+              setProductosInfo((prev) => ({ ...prev, [item.producto_id]: item.productos }));
+            }
+          });
+        }
+      } catch (sbErr) {
+        console.error('Error al consultar Supabase:', sbErr);
+      }
     }
   }
 
   async function cargarVentasCompletadas() {
     try {
       const res = await fetch(`${API_URL}/ventas?estado=completada`);
+      if (!res.ok) throw new Error('Backend API error');
       const data = await res.json();
       setVentas(data);
     } catch (err) {
-      console.error('Error cargando ventas:', err);
+      console.warn('Backend local no disponible. Consultando Supabase directamente (ventas)...', err);
+      try {
+        const { data, error } = await supabase
+          .from('ventas')
+          .select('*, items:detalle_ventas(*, producto:productos(*))')
+          .eq('estado', 'completada')
+          .order('created_at', { ascending: false });
+        if (data && !error) {
+          setVentas(data);
+          const itemsMap = {};
+          data.forEach((v) => {
+            if (v.items) {
+              itemsMap[v.id] = v.items;
+              v.items.forEach((item) => {
+                if (item.producto) {
+                  setProductosInfo((prev) => ({ ...prev, [item.producto_id]: item.producto }));
+                }
+              });
+            }
+          });
+          setItemsPorVenta((prev) => ({ ...prev, ...itemsMap }));
+        }
+      } catch (sbErr) {
+        console.error('Error al consultar Supabase:', sbErr);
+      }
     }
   }
 
@@ -68,10 +124,18 @@ function App() {
     if (!id || productosInfo[id]) return;
     try {
       const res = await fetch(`${API_URL}/productos/${id}`);
+      if (!res.ok) throw new Error('Backend API error');
       const data = await res.json();
       setProductosInfo((prev) => ({ ...prev, [id]: data }));
     } catch {
-      // Ignorar error si no se encuentra
+      try {
+        const { data } = await supabase.from('productos').select('*').eq('id', id).single();
+        if (data) {
+          setProductosInfo((prev) => ({ ...prev, [id]: data }));
+        }
+      } catch {
+        // Ignorar si no se encuentra
+      }
     }
   }
 
@@ -150,7 +214,10 @@ function App() {
     ventas.forEach((v) => {
       if (!itemsPorVenta[v.id]) {
         fetch(`${API_URL}/ventas/${v.id}`)
-          .then((res) => res.json())
+          .then((res) => {
+            if (!res.ok) throw new Error('API fetch error');
+            return res.json();
+          })
           .then((data) => {
             if (data.items) {
               setItemsPorVenta((prev) => ({ ...prev, [v.id]: data.items }));
@@ -159,7 +226,23 @@ function App() {
               });
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            supabase
+              .from('detalle_ventas')
+              .select('*, producto:productos(*)')
+              .eq('venta_id', v.id)
+              .then(({ data }) => {
+                if (data) {
+                  setItemsPorVenta((prev) => ({ ...prev, [v.id]: data }));
+                  data.forEach((item) => {
+                    if (item.producto) {
+                      setProductosInfo((prev) => ({ ...prev, [item.producto_id]: item.producto }));
+                    }
+                  });
+                }
+              })
+              .catch(() => {});
+          });
       }
     });
   }, [ventas]);
